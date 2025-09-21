@@ -1,0 +1,8 @@
+{
+  "name": "OpenVibe",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "vue-vite",
+  "id": "8f670227"
+}
