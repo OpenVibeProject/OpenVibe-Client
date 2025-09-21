@@ -6,3 +6,25 @@ body {
   color: #ffffff;
   font-family: 'Inter', sans-serif;
 }
+
+ion-page {
+  background: #000000;
+}
+
+ion-content {
+  --background: #000000;
+  --color: #ffffff;
+}
+
+ion-app {
+  background: #000000;
+}
+
+ion-header {
+  --background: #000000;
+}
+
+ion-toolbar {
+  --background: #000000;
+  --color: #ffffff;
+}

@@ -5,6 +5,14 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/',
     component: () => import('../views/Home.vue')
+  },
+  {
+    path: '/bluetooth-setup',
+    component: () => import('../views/BluetoothSetup.vue')
+  },
+  {
+    path: '/wifi-setup',
+    component: () => import('../views/WiFiSetup.vue')
   }
 ]
 
