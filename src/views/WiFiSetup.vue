@@ -6,6 +6,7 @@ import MaterialSymbolsWifiSharp from '~icons/material-symbols/wifi-sharp';
 import { useBleStore } from '@/stores/ble';
 import { BLEEnum } from '@/types/BLEEnum';
 import { BleClient } from '@capacitor-community/bluetooth-le';
+import MaterialSymbolsLockOutline from '~icons/material-symbols/lock-outline';
 
 interface WiFiNetwork
 {
@@ -105,23 +106,29 @@ onMounted(async () =>
           <p class="text-lg text-gray-400">Let’s connect your vibrator to the WI-FI</p>
         </div>
 
-        <div class="rounded-lg shadow-lg p-4">
-          <div v-if="networks.length > 0" class="max-h-[60vh] overflow-y-auto space-y-2">
+        <div class="rounded-lg shadow-lg p-2">
+          <div v-if="networks.length > 0" class="max-h-[60vh] overflow-y-auto">
             <div v-for="network in networks" :key="network.SSID" @click="selectNetwork(network)"
-              class="p-3 bg-zinc-800 rounded cursor-pointer hover:bg-zinc-700">
-              <div class="flex justify-between items-center">
-                <div>
-                  <div class="font-medium flex flex-row gap-2">
-                    <MaterialSymbolsWifiSharp />{{ network.SSID }}
+              class="p-3 bg-zinc-800 cursor-pointer networks-container hover:bg-zinc-700">
+              <div class="flex justify-between items-center text-xl p-2">
+                <div class="w-full flex items-center justify-between">
+                  <div class="flex flex-row gap-3 items-center">
+                    <MaterialSymbolsWifiSharp class="text-blue-500 text-2xl" />
+                    <p>{{ network.SSID === '' ? 'Unknown' : network.SSID  }}</p>
                   </div>
                   <div class="text-xs text-gray-400">
-                    {{ network.capabilities?.includes('WPA') ? '🔒 Secured' : '🔓 Open' }} • Signal: {{ network.level }}
-                    dBm
+                    <MaterialSymbolsLockOutline class="text-lg" v-if="network.capabilities?.includes('WPA')" />
                   </div>
                 </div>
               </div>
             </div>
           </div>
+        </div>
+
+        <div class="flex flex-row w-60 mx-auto justify-center gap-4 text-lg">
+          <span>Add custom</span>
+          •
+          <span>Skip for now</span>
         </div>
       </div>
 
@@ -146,4 +153,20 @@ onMounted(async () =>
   </ion-page>
 </template>
 
-<style scoped></style>
+<style scoped>
+.networks-container {
+  border: #626262 1px solid;
+  border-bottom: none;
+}
+
+.networks-container:first-child {
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+}
+
+.networks-container:last-child {
+  border-bottom-left-radius: 20px;
+  border-bottom-right-radius: 20px;
+  border: #626262 1px solid;
+}
+</style>
