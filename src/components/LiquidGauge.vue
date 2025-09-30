@@ -30,7 +30,8 @@ const fillColor = computed(() => {
   return `rgb(${r},${g},${b})`;
 });
 
-const waveY = computed(() => 205 - (clamped.value / 100) * 200);
+const currentLevel = ref(0);
+const targetLevel = computed(() => 205 - (clamped.value / 100) * 200);
 
 const wave1Path = ref('');
 const wave2Path = ref('');
@@ -42,7 +43,7 @@ const generateWavePath = (offset: number, amplitude: number) => {
   const width = 220;
   
   for (let x = -10; x <= width; x += 2) {
-    const y = waveY.value + Math.sin((x + offset) * 0.02) * amplitude;
+    const y = currentLevel.value + Math.sin((x + offset) * 0.02) * amplitude;
     points.push(`${x},${y}`);
   }
   
@@ -50,6 +51,9 @@ const generateWavePath = (offset: number, amplitude: number) => {
 };
 
 const animate = () => {
+  const diff = targetLevel.value - currentLevel.value;
+  currentLevel.value += diff * 0.05;
+  
   time += 1;
   wave1Path.value = generateWavePath(time * 2, 8);
   wave2Path.value = generateWavePath(time * 1.5 + 50, 6);
@@ -57,6 +61,7 @@ const animate = () => {
 };
 
 onMounted(() => {
+  currentLevel.value = targetLevel.value;
   animate();
 });
 

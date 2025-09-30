@@ -1,7 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { IonPage, IonHeader, IonToolbar, IonTitle, IonContent } from '@ionic/vue';
+import { ref, onMounted, onUnmounted } from 'vue';
+import { useRouter } from 'vue-router';
+import { useBleStore } from '@/stores/ble';
+import { IonPage, IonContent } from '@ionic/vue';
 import { BleClient, ScanResult } from '@capacitor-community/bluetooth-le';
+import MaterialSymbolsBluetooth from '~icons/material-symbols/bluetooth';
+
+const isBluetoothAvailable = ref(false);
 
 const devices = ref<ScanResult[]>([
     {
@@ -29,7 +34,7 @@ const devices = ref<ScanResult[]>([
         localName: 'Fitbit Charge 5',
         rssi: -55
     },
-        {
+    {
         device: { deviceId: 'AA:BB:CC:DD:EE:04', name: 'Sony WH-1000XM4' },
         localName: 'Sony WH-1000XM4',
         rssi: -28
@@ -39,7 +44,7 @@ const devices = ref<ScanResult[]>([
         localName: 'Fitbit Charge 5',
         rssi: -55
     },
-        {
+    {
         device: { deviceId: 'AA:BB:CC:DD:EE:04', name: 'Sony WH-1000XM4' },
         localName: 'Sony WH-1000XM4',
         rssi: -28
@@ -52,35 +57,87 @@ const devices = ref<ScanResult[]>([
 ] as ScanResult[]);
 const isScanning = ref(false);
 
-const scanForDevices = async () => {
-    try {
+const bleStore = useBleStore();
+const router = useRouter();
+
+const scanForDevices = async () =>
+{
+    try
+    {
         isScanning.value = true;
         devices.value = [];
-        
+
         await BleClient.initialize();
-        
-        await BleClient.requestLEScan({}, (result) => {
-            if (!devices.value.find(d => d.device.deviceId === result.device.deviceId)) {
+
+        await BleClient.requestLEScan({}, (result) =>
+        {
+            if (!devices.value.find(d => d.device.deviceId === result.device.deviceId))
+            {
                 devices.value.push(result);
             }
         });
-        
-        setTimeout(async () => {
+
+        setTimeout(async () =>
+        {
             await BleClient.stopLEScan();
             isScanning.value = false;
         }, 5000);
-    } catch (error) {
+    } catch (error)
+    {
         console.error('Bluetooth scan error:', error);
         isScanning.value = false;
     }
 };
 
-onMounted(async () => {
+const connectToDevice = async (device: ScanResult) =>
+{
+    try
+    {
+        const deviceId = device.device.deviceId;
+        await BleClient.connect(deviceId);
+        bleStore.setConnection(deviceId, device);
+        router.push('/wifi-setup');
+    } catch (error)
+    {
+        alert('Failed to connect: ' + error);
+        console.error('Failed to connect:', error);
+    }
+};
+
+const checkBluetoothAvailability = async () => {
     try {
         await BleClient.initialize();
-        await scanForDevices();
+        const isEnabled = await BleClient.isEnabled();
+        isBluetoothAvailable.value = isEnabled;
+        return isEnabled;
     } catch (error) {
-        console.error('Bluetooth initialization error:', error);
+        isBluetoothAvailable.value = false;
+        return false;
+    }
+};
+
+let bluetoothCheckInterval: number;
+
+onMounted(async () => {
+    await checkBluetoothAvailability();
+    
+    bluetoothCheckInterval = setInterval(async () => {
+        const wasAvailable = isBluetoothAvailable.value;
+        const isAvailable = await checkBluetoothAvailability();
+        
+        if (!wasAvailable && isAvailable) {
+            await scanForDevices();
+        }
+    }, 1000);
+    
+    if (isBluetoothAvailable.value) {
+        await scanForDevices();
+    }
+});
+
+onUnmounted(() => {
+    if (bluetoothCheckInterval) {
+        clearInterval(bluetoothCheckInterval);
     }
 });
 </script>
@@ -90,34 +147,52 @@ onMounted(async () => {
         <ion-content class="ion-padding-top">
             <div class="flex flex-col w-5/6 mx-auto gap-8 mt-[15vh]">
                 <div class="text-center">
-                    <h1 class="text-3xl font-bold mb-5">Let's setup your device</h1>
-                    <p class="text-lg text-gray-400">First we'll connect with bluetooth</p>
-                </div>
-                
-                <div class="rounded-lg shadow-lg p-4">
-                    <div v-if="devices.length > 0" class="max-h-[50vh] overflow-y-auto space-y-2">
-                        <div 
-                            v-for="device in devices" 
-                            :key="device.device.deviceId"
-                            class="p-2 bg-zinc-800 rounded"
-                        >
-                            <div class="font-medium">{{ device.device.name || device.localName || 'Unknown Device' }}</div>
-                            <div class="text-sm">{{ device.device.deviceId }}</div>
-                            <div v-if="device.rssi" class="text-xs">Signal: {{ device.rssi }} dBm</div>
-                        </div>
-                    </div>
-                    
-                    <p v-else-if="!isScanning" class="text-gray-500 text-sm text-center">
-                        No devices found
-                    </p>
-                </div>
+                    <h1 class="text-3xl font-bold mb-5">Let's get started</h1>
+                    <p class="text-lg text-gray-400">First we’ll connect to your device using bluetooth</p>
 
-                <button class="btn bg-blue-500 p-4 rounded-lg mx-auto" @click="scanForDevices" :disabled="isScanning">
-                    {{ isScanning ? 'Scanning...' : 'Scan for Devices' }}
-                </button>
+                </div>
+                <div class="search-container flex flex-col gap-15 justify-center items-center">
+                    <div class="bluetooth-search mx-auto mt-[10vh] rounded-full p-5" :class="isBluetoothAvailable ? '' : 'disabled'">
+                        <MaterialSymbolsBluetooth class="text-[10rem]" 
+                        :class="isBluetoothAvailable ? 'text-blue-500' : 'text-gray-500'" />
+                    </div>
+                    <p v-if="isBluetoothAvailable" class="text-xl">We're searching your device</p>
+                    <p v-else class="text-xl">Please turn on the bluetooth</p>
+                </div>
             </div>
         </ion-content>
     </ion-page>
 </template>
 
-<style scoped></style>
+<style scoped>
+.bluetooth-search {
+    animation: pulse 2s infinite;
+}
+
+.disabled {
+    background-color: #4d4d4d60;
+    box-shadow: 0px 0px 10px #4d4d4d60;
+    border: #626262 1px solid;
+    animation: none;
+}
+
+@keyframes pulse {
+    0% {
+        background-color: #4d4d4d60;
+        box-shadow: 0px 0px 10px #4d4d4d60;
+        border: #626262 1px solid;
+    }
+
+    50% {
+        background-color: #2b6eff50;
+        box-shadow: 0px 0px 50px #3373ff;
+        border: #3373ff 1px solid;
+    }
+
+    100% {
+        background-color: #4d4d4d60;
+        box-shadow: 0px 0px 10px #4d4d4d60;
+        border: #626262 1px solid;
+    }
+}
+</style>
