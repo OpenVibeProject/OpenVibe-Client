@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import { IonContent, IonPage, IonButton, IonInput, IonItem, IonModal } from '@ionic/vue';
+import { IonContent, IonPage } from '@ionic/vue';
 import { WifiWizard2 } from '@awesome-cordova-plugins/wifi-wizard-2';
 import MaterialSymbolsWifiSharp from '~icons/material-symbols/wifi-sharp';
 import { useBleStore } from '@/stores/ble';
 import { BLEEnum } from '@/types/BLEEnum';
 import { BleClient } from '@capacitor-community/bluetooth-le';
 import MaterialSymbolsLockOutline from '~icons/material-symbols/lock-outline';
+import WiFiCredentialsModal from '@/components/WiFiCredentialsModal.vue';
+import router from '@/router'
 
 interface WiFiNetwork
 {
@@ -28,7 +30,7 @@ const networks = ref<WiFiNetwork[]>([
 const isScanning = ref(false);
 const showPasswordModal = ref(false);
 const selectedNetwork = ref<WiFiNetwork | null>(null);
-const password = ref('');
+const isCustomNetwork = ref(false);
 
 const scanNetworks = async () =>
 {
@@ -55,19 +57,19 @@ const selectNetwork = (network: WiFiNetwork) =>
     showPasswordModal.value = true;
   } else
   {
-    connectToNetwork();
+    connectToNetwork({ ssid: network.SSID, password: '' });
   }
 };
 
 const bleStore = useBleStore();
 
-const connectToNetwork = async () =>
+const connectToNetwork = async (data: { ssid: string; password: string }) =>
 {
   try
   {
-    if (bleStore.deviceId && selectedNetwork.value)
+    if (bleStore.deviceId)
     {
-      const payload = JSON.stringify({ ssid: selectedNetwork.value.SSID, password: password.value });
+      const payload = JSON.stringify({ ssid: data.ssid, password: data.password });
       const encoder = new TextEncoder();
       const value = encoder.encode(payload);
       await BleClient.write(
@@ -88,7 +90,19 @@ const connectToNetwork = async () =>
     console.error('Connection error:', error);
   }
   showPasswordModal.value = false;
-  password.value = '';
+};
+
+const handleModalDismiss = () =>
+{
+  showPasswordModal.value = false;
+  isCustomNetwork.value = false;
+};
+
+const showCustomModal = () =>
+{
+  selectedNetwork.value = null;
+  isCustomNetwork.value = true;
+  showPasswordModal.value = true;
 };
 
 onMounted(async () =>
@@ -126,29 +140,19 @@ onMounted(async () =>
         </div>
 
         <div class="flex flex-row w-60 mx-auto justify-center gap-4 text-lg">
-          <span>Add custom</span>
+          <span @click="showCustomModal" class="cursor-pointer hover:text-blue-400">Add custom</span>
           •
-          <span>Skip for now</span>
+          <span class="cursor-pointer hover:text-blue-400" @click="router.push('/')">Skip for now</span>
         </div>
       </div>
 
-      <ion-modal :is-open="showPasswordModal" @did-dismiss="showPasswordModal = false">
-        <div class="p-6">
-          <h2 class="text-xl font-bold mb-4">Enter Password</h2>
-          <p class="mb-4">Network: {{ selectedNetwork?.SSID }}</p>
-          <ion-item>
-            <ion-input v-model="password" type="password" placeholder="WiFi Password"></ion-input>
-          </ion-item>
-          <div class="flex gap-4 mt-6">
-            <ion-button @click="showPasswordModal = false" fill="outline" expand="block">
-              Cancel
-            </ion-button>
-            <ion-button @click="connectToNetwork" expand="block">
-              Connect
-            </ion-button>
-          </div>
-        </div>
-      </ion-modal>
+      <WiFiCredentialsModal 
+        :is-open="showPasswordModal" 
+        :network="selectedNetwork" 
+        :is-custom="isCustomNetwork"
+        @dismiss="handleModalDismiss" 
+        @connect="connectToNetwork" 
+      />
     </ion-content>
   </ion-page>
 </template>

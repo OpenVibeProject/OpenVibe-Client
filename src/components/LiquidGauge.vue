@@ -94,6 +94,9 @@ onUnmounted(() => {
         <Roller :duration="100" :value="clamped.toString()"/>
         <span>%</span>
     </div>
+    <div class="customize-button">
+      Customize
+    </div>
   </div>
 </template>
 
@@ -126,6 +129,25 @@ onUnmounted(() => {
   justify-content: center;
   z-index: 10;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+.customize-button {
+  position: absolute;
+  bottom: 20%;
+  right: -10%;
+  background-color: #333;
+  border: #626262 1px solid;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 12px;
+  padding-right: 12px;
+  border-radius: 20px;
+  font-size: 1em;
+  font-weight: bold;
+  cursor: pointer;
+  z-index: 10;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+  transition: background-color 0.3s, color 0.3s;
 }
 
 .percentage-text {
