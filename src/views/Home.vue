@@ -8,35 +8,41 @@ import { Roller } from 'vue-roller';
 const sliderValue = ref(50);
 const percentage = ref(50);
 
-const onSliderRelease = () => {
+const onSliderRelease = () =>
+{
     percentage.value = sliderValue.value;
 };
 
-const fillColor = computed(() => {
-  const p = sliderValue.value;
-  let r, g, b;
-  
-  if (p >= 50) {
-    const t = (p - 50) / 50;
-    r = Math.round(255 * (1 - t) + 166 * t);
-    g = Math.round(255 * (1 - t) + 227 * t);
-    b = Math.round(0 * (1 - t) + 161 * t);
-  } else {
-    const t = p / 50;
-    r = 255;
-    g = Math.round(255 * t);
-    b = 0;
-  }
-  
-  return `rgb(${r},${g},${b})`;
+const fillColor = computed(() =>
+{
+    const p = sliderValue.value;
+    let r, g, b;
+
+    if (p >= 50)
+    {
+        const t = (p - 50) / 50;
+        r = Math.round(255 * (1 - t) + 166 * t);
+        g = Math.round(255 * (1 - t) + 227 * t);
+        b = Math.round(0 * (1 - t) + 161 * t);
+    } else
+    {
+        const t = p / 50;
+        r = 255;
+        g = Math.round(255 * t);
+        b = 0;
+    }
+
+    return `rgb(${r},${g},${b})`;
 });
 
-const sliderBackground = computed(() => {
+const sliderBackground = computed(() =>
+{
     return `linear-gradient(to right, ${fillColor.value} ${sliderValue.value}%, #333 ${sliderValue.value}%)`;
 });
 
-const knobLabelPosition = computed(() => {
-    return `${sliderValue.value / 1.139}%`;
+const knobLabelPosition = computed(() =>
+{
+    return `${sliderValue.value / 1.14}%`;
 });
 </script>
 
@@ -47,12 +53,14 @@ const knobLabelPosition = computed(() => {
                 <LiquidGauge :percentage="percentage" />
 
                 <div class="w-full max-w-sm mt-8">
+                    <h1 class="text-2xl">Intensity</h1>
                     <div class="relative w-full">
                         <input type="range" min="0" max="100" step="1" v-model="sliderValue"
                             class="custom-slider w-full" :style="{ background: sliderBackground }"
                             @change="onSliderRelease" />
 
-                        <div class="knob-label-text text-slate-600 font-bold text-lg" :style="{ left: knobLabelPosition }">
+                        <div class="knob-label-text text-slate-600 font-bold text-lg"
+                            :style="{ left: knobLabelPosition }">
                             <Roller :duration="100" :value="sliderValue.toString()" />
                         </div>
 

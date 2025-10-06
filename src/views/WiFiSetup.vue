@@ -121,7 +121,7 @@ onMounted(async () =>
         </div>
 
         <div class="rounded-lg shadow-lg p-2">
-          <div v-if="networks.length > 0" class="max-h-[60vh] overflow-y-auto">
+          <div v-if="networks.length > 0" class="max-h-[55vh] overflow-y-auto">
             <div v-for="network in networks" :key="network.SSID" @click="selectNetwork(network)"
               class="p-3 bg-zinc-800 cursor-pointer networks-container hover:bg-zinc-700">
               <div class="flex justify-between items-center text-xl p-2">
