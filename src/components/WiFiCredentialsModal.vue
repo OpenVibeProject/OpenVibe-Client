@@ -1,27 +1,11 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { IonModal } from '@ionic/vue';
+import { WiFiProps } from '@/types/WiFiProps';
+import { WiFiEmits } from '@/types/WiFiEmits';
 
-interface WiFiNetwork {
-  SSID: string;
-  level: number;
-  capabilities: string;
-}
-
-interface Props {
-  isOpen: boolean;
-  network: WiFiNetwork | null;
-  error?: string;
-  isCustom?: boolean;
-}
-
-interface Emits {
-  (e: 'dismiss'): void;
-  (e: 'connect', data: { ssid: string; password: string }): void;
-}
-
-const props = defineProps<Props>();
-const emit = defineEmits<Emits>();
+const props = defineProps<WiFiProps>();
+const emit = defineEmits<WiFiEmits>();
 
 const password = ref('');
 const customSSID = ref('');
