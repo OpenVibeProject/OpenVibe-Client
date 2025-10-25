@@ -4,11 +4,12 @@ import { useDebugStore } from '@/stores/debug';
 import MaterialSymbolsBugReport from '~icons/material-symbols/bug-report';
 import MaterialSymbolsClose from '~icons/material-symbols/close';
 import MaterialSymbolsDelete from '~icons/material-symbols/delete';
+import MaterialSymbolsMinimize from '~icons/material-symbols/minimize';
 
 const debugStore = useDebugStore();
 const isOpen = ref(false);
 const isDragging = ref(false);
-const position = ref({ x: 20, y: 20 });
+const position = ref({ x: 50, y: 50 });
 
 const formatTime = (date: Date) => {
   return date.toLocaleTimeString('en-US', { hour12: false });
@@ -24,26 +25,34 @@ const getLogColor = (level: string) => {
   return colors[level as keyof typeof colors] || 'text-gray-400';
 };
 
-const handleMouseDown = (e: MouseEvent) => {
+const handleStart = (e: MouseEvent | TouchEvent) => {
   isDragging.value = true;
-  const startX = e.clientX - position.value.x;
-  const startY = e.clientY - position.value.y;
+  const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+  const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+  const startX = clientX - position.value.x;
+  const startY = clientY - position.value.y;
 
-  const handleMouseMove = (e: MouseEvent) => {
+  const handleMove = (e: MouseEvent | TouchEvent) => {
+    const moveX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const moveY = 'touches' in e ? e.touches[0].clientY : e.clientY;
     position.value = {
-      x: Math.max(0, Math.min(window.innerWidth - 60, e.clientX - startX)),
-      y: Math.max(0, Math.min(window.innerHeight - 60, e.clientY - startY))
+      x: Math.max(0, Math.min(window.innerWidth - 60, moveX - startX)),
+      y: Math.max(0, Math.min(window.innerHeight - 60, moveY - startY))
     };
   };
 
-  const handleMouseUp = () => {
+  const handleEnd = () => {
     isDragging.value = false;
-    document.removeEventListener('mousemove', handleMouseMove);
-    document.removeEventListener('mouseup', handleMouseUp);
+    document.removeEventListener('mousemove', handleMove);
+    document.removeEventListener('mouseup', handleEnd);
+    document.removeEventListener('touchmove', handleMove);
+    document.removeEventListener('touchend', handleEnd);
   };
 
-  document.addEventListener('mousemove', handleMouseMove);
-  document.addEventListener('mouseup', handleMouseUp);
+  document.addEventListener('mousemove', handleMove);
+  document.addEventListener('mouseup', handleEnd);
+  document.addEventListener('touchmove', handleMove);
+  document.addEventListener('touchend', handleEnd);
 };
 </script>
 
@@ -52,20 +61,26 @@ const handleMouseDown = (e: MouseEvent) => {
     <div 
       v-if="!isOpen"
       class="debug-icon"
-      @mousedown="handleMouseDown"
+      @mousedown="handleStart"
+      @touchstart="handleStart"
       @click="!isDragging && (isOpen = true)"
     >
       <MaterialSymbolsBugReport class="text-2xl" />
     </div>
     
     <div v-else class="debug-panel">
-      <div class="debug-header" @mousedown="handleMouseDown">
+      <div class="debug-header" @mousedown="handleStart" @touchstart="handleStart">
         <span>Debug Console</span>
         <div class="debug-controls">
           <MaterialSymbolsDelete 
             class="control-btn" 
             @click="debugStore.clearLogs()" 
             title="Clear logs"
+          />
+          <MaterialSymbolsMinimize 
+            class="control-btn" 
+            @click="isOpen = false" 
+            title="Minimize"
           />
           <MaterialSymbolsClose 
             class="control-btn" 

@@ -7,6 +7,7 @@ import { Roller } from 'vue-roller';
 
 const sliderValue = ref(50);
 const percentage = ref(50);
+const isOnline = ref(false);
 
 const onSliderRelease = () =>
 {
@@ -51,6 +52,15 @@ const knobLabelPosition = computed(() =>
         <ion-content>
             <div class="flex flex-col justify-center items-center h-full px-8">
                 <LiquidGauge :percentage="percentage" />
+                <h1 class="text-4xl mt-4">Status</h1>
+                <div v-if="isOnline" class="flex gap-2 flex-row justify-center items-center text-green-500">
+                    <h2 class="text-lg">⬤</h2>
+                    <h2 class="text-lg mt-1">Online</h2>
+                </div>
+                <div v-else class="flex gap-2 flex-row justify-center items-center text-red-500">
+                    <h2 class="text-lg">⬤</h2>
+                    <h2 class="text-lg mt-1">Offline</h2>
+                </div>
 
                 <div class="w-full max-w-sm mt-8">
                     <h1 class="text-2xl">Intensity</h1>
