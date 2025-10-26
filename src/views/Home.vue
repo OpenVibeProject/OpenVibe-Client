@@ -51,7 +51,7 @@ const knobLabelPosition = computed(() =>
     <ion-page>
         <ion-content>
             <div class="flex flex-col justify-center items-center h-full px-8">
-                <LiquidGauge :percentage="percentage" />
+                <LiquidGauge :battery="percentage" :intensity="percentage" />
                 <h1 class="text-4xl mt-4">Status</h1>
                 <div v-if="isOnline" class="flex gap-2 flex-row justify-center items-center text-green-500">
                     <h2 class="text-lg">⬤</h2>
@@ -69,9 +69,8 @@ const knobLabelPosition = computed(() =>
                             class="custom-slider w-full" :style="{ background: sliderBackground }"
                             @change="onSliderRelease" />
 
-                        <div class="knob-label-text text-slate-600 font-bold text-lg"
-                            :style="{ left: knobLabelPosition }">
-                            <Roller :duration="100" :value="sliderValue.toString()" />
+                        <div :class="sliderValue > 40 ? 'text-black' : 'text-white'" class="slider-center-text mt-2 font-bold text-xl">
+                            <Roller :duration="100" :value="sliderValue.toString() + '%'" />
                         </div>
 
                     </div>
@@ -99,12 +98,12 @@ ion-content {
     -webkit-appearance: none;
     appearance: none;
     width: 100%;
-    height: 16px;
-    border-radius: 8px;
+    height: 24px;
+    border-radius: 15px;
     outline: none;
     cursor: pointer;
     position: relative;
-    margin-top: 24px;
+    margin-top: 20px;
 }
 
 .custom-slider::-webkit-slider-runnable-track {
@@ -120,12 +119,12 @@ ion-content {
 .custom-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 48px;
-    height: 48px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     background: v-bind(fillColor);
     cursor: grab;
-    margin-top: -17px;
+    margin-top: -10px;
 }
 
 .custom-slider::-moz-range-thumb {
@@ -136,15 +135,16 @@ ion-content {
     cursor: grab;
 }
 
-.knob-label-text {
+.slider-center-text {
     position: absolute;
-    width: 48px;
-    height: 48px;
-    top: 7px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     pointer-events: none;
     user-select: none;
     display: flex;
     align-items: center;
     justify-content: center;
+    z-index: 10;
 }
 </style>

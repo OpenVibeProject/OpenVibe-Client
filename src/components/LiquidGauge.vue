@@ -2,14 +2,16 @@
 import { computed, ref, onMounted, onUnmounted } from "vue";
 import { Roller } from "vue-roller";
 import "vue-roller/dist/style.css";
+import vibrator from '../../public/vibrator.png'
 
 interface Props {
-  percentage: number;
+  battery: number;
+  intensity: number;
 }
 
 const props = defineProps<Props>();
 
-const clamped = computed(() => Math.min(100, Math.max(0, props.percentage)));
+const clamped = computed(() => Math.min(100, Math.max(0, props.battery)));
 
 const fillColor = computed(() => {
   const p = clamped.value;
@@ -35,6 +37,7 @@ const targetLevel = computed(() => 205 - (clamped.value / 100) * 200);
 
 const wave1Path = ref('');
 const wave2Path = ref('');
+const shakeSpeed = computed(() => props.intensity > 0 ? Math.max(0.05, 0.5 - (props.intensity / 100) * 0.4) : 0);
 let animationId: number;
 let time = 0;
 
@@ -60,6 +63,8 @@ const animate = () => {
   animationId = requestAnimationFrame(animate);
 };
 
+
+
 onMounted(() => {
   currentLevel.value = targetLevel.value;
   animate();
@@ -72,6 +77,7 @@ onUnmounted(() => {
 
 <template>
   <div class="gauge">
+    <img class="vibrator absolute rotate-15 w-45 bottom-[-15px] left-10" :style="{ animationDuration: shakeSpeed > 0 ? `${shakeSpeed}s` : 'none' }" :class="{ 'shake-animation': props.intensity > 0 }" :src="vibrator">
     <svg viewBox="0 0 200 200" class="gauge-svg">
       <defs>
         <clipPath id="clip-circle">
@@ -152,5 +158,23 @@ onUnmounted(() => {
 
 .percentage-text {
   text-shadow: 0 0 10px rgba(0,0,0,0.8);
+}
+
+.shake-animation {
+  animation: shake infinite;
+}
+
+@keyframes shake {
+  0% { transform: translate(1px, 1px) rotate(1deg); }
+  10% { transform: translate(-1px, -2px) rotate(2deg); }
+  20% { transform: translate(-3px, 0px) rotate(3deg); }
+  30% { transform: translate(3px, 2px) rotate(0deg); }
+  40% { transform: translate(1px, -1px) rotate(2deg); }
+  50% { transform: translate(-1px, 2px) rotate(1deg); }
+  60% { transform: translate(-3px, 1px) rotate(0deg); }
+  70% { transform: translate(3px, 1px) rotate(3deg); }
+  80% { transform: translate(-1px, -1px) rotate(2deg); }
+  90% { transform: translate(1px, 2px) rotate(0deg); }
+  100% { transform: translate(1px, -2px) rotate(1deg); }
 }
 </style>
