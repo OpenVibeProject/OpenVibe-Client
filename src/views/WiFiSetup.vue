@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, onUnmounted, watch } from 'vue';
 import { IonContent, IonPage } from '@ionic/vue';
 import { WifiWizard2 } from '@awesome-cordova-plugins/wifi-wizard-2';
 import MaterialSymbolsWifiSharp from '~icons/material-symbols/wifi-sharp';
 import { useBleStore } from '@/stores/ble';
-import { BLEEnum } from '@/types/BLEEnum';
-import { BleClient } from '@capacitor-community/bluetooth-le';
+import { useDebugStore } from '@/stores/debug';
 import MaterialSymbolsLockOutline from '~icons/material-symbols/lock-outline';
 import WiFiCredentialsModal from '@/components/WiFiCredentialsModal.vue';
 import router from '@/router'
@@ -17,20 +16,14 @@ interface WiFiNetwork
   capabilities: string;
 }
 
-const networks = ref<WiFiNetwork[]>([
-  // add mock kwifis
-  { SSID: 'Home_Network', level: -45, capabilities: 'WPA2' },
-  { SSID: 'Guest_WiFi', level: -70, capabilities: 'WPA' },
-  { SSID: 'Open_Network', level: -80, capabilities: '' },
-  // more
-  { SSID: 'Coffee_Shop_WiFi', level: -60, capabilities: 'WPA2' },
-  { SSID: 'Library_WiFi', level: -75, capabilities: 'WPA' },
-  { SSID: 'Airport_Free_WiFi', level: -85, capabilities: '' },
-]);
+const bleStore = useBleStore();
+const debugStore = useDebugStore();
+const networks = ref<WiFiNetwork[]>([]);
 const isScanning = ref(false);
 const showPasswordModal = ref(false);
 const selectedNetwork = ref<WiFiNetwork | null>(null);
 const isCustomNetwork = ref(false);
+let unsub: (() => void) | null = null;
 
 const scanNetworks = async () =>
 {
@@ -61,8 +54,6 @@ const selectNetwork = (network: WiFiNetwork) =>
   }
 };
 
-const bleStore = useBleStore();
-
 const connectToNetwork = async (data: { ssid: string; password: string }) =>
 {
   try
@@ -70,14 +61,7 @@ const connectToNetwork = async (data: { ssid: string; password: string }) =>
     if (bleStore.deviceId)
     {
       const payload = JSON.stringify({ ssid: data.ssid, password: data.password });
-      const encoder = new TextEncoder();
-      const value = encoder.encode(payload);
-      await BleClient.write(
-        bleStore.deviceId,
-        BLEEnum.SERVICE_UUID,
-        BLEEnum.CHARACTERISTIC_UUID,
-        new DataView(value.buffer)
-      );
+      await bleStore.writeCharacteristic(payload);
       alert('WiFi credentials sent to device!');
     } else
     {
@@ -105,10 +89,36 @@ const showCustomModal = () =>
   showPasswordModal.value = true;
 };
 
-onMounted(async () =>
-{
+const onNotification = (payload: any) => {
+  // payload has { raw, parsed }
+  debugStore.addLog('debug', `BLE notification received: ${String(payload.raw)}`);
+  if (payload.parsed) {
+    debugStore.addLog('info', `BLE StatusResponse: ${JSON.stringify(payload.parsed)}`);
+    if (payload.parsed && typeof payload.parsed === 'object' && 'wifiConnected' in payload.parsed && payload.parsed.wifiConnected) {
+      router.push('/');
+    }
+  }
+};
+
+onMounted(async () => {
   await scanNetworks();
-})
+  // attach to BLE notifications emitted by store
+  bleStore.on('notifying', (msg) => {
+    debugStore.addLog('debug', `BLE notifying: ${msg}`);
+  })
+  bleStore.on('error', (msg) => {
+    debugStore.addLog('error', `BLE error: ${msg}`);
+  })
+    bleStore.on('warn', (msg) => {
+    debugStore.addLog('warn', `BLE error: ${msg}`);
+  })
+  unsub = bleStore.on('notification', onNotification);
+  // if device already connected, the store will have started notifications
+});
+
+onUnmounted(() => {
+  if (unsub) unsub();
+});
 </script>
 
 <template>

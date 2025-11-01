@@ -1,15 +1,50 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch, nextTick, onMounted, type CSSProperties } from 'vue';
 import { useDebugStore } from '@/stores/debug';
 import MaterialSymbolsBugReport from '~icons/material-symbols/bug-report';
 import MaterialSymbolsClose from '~icons/material-symbols/close';
 import MaterialSymbolsDelete from '~icons/material-symbols/delete';
 import MaterialSymbolsMinimize from '~icons/material-symbols/minimize';
+import MaterialSymbolsContentCopy from '~icons/material-symbols/content-copy';
 
 const debugStore = useDebugStore();
 const isOpen = ref(false);
 const isDragging = ref(false);
 const position = ref({ x: 50, y: 50 });
+const logsContainer = ref<HTMLElement | null>(null);
+
+// Style for minimized draggable icon
+const iconStyle = (): CSSProperties => ({
+  position: 'fixed',
+  left: `${position.value.x}px`,
+  top: `${position.value.y}px`,
+  zIndex: 9999,
+  pointerEvents: 'auto',
+});
+
+const copyAll = async () => {
+  try {
+    const lines = debugStore.logs.map(
+      (l) => `${formatTime(l.timestamp)} [${l.level.toUpperCase()}] ${l.message}`
+    );
+    const text = lines.join('\n');
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      debugStore.addLog('info', 'Copied debug console content to clipboard');
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      debugStore.addLog('info', 'Copied debug console content to clipboard (fallback)');
+    }
+  } catch (e) {
+    debugStore.addLog('error', `Failed to copy debug logs: ${e}`);
+  }
+};
 
 const formatTime = (date: Date) => {
   return date.toLocaleTimeString('en-US', { hour12: false });
@@ -20,11 +55,12 @@ const getLogColor = (level: string) => {
     info: 'text-blue-400',
     warn: 'text-yellow-400',
     error: 'text-red-400',
-    debug: 'text-gray-400'
+    debug: 'text-gray-400',
   };
   return colors[level as keyof typeof colors] || 'text-gray-400';
 };
 
+// Draggable behavior for minimized icon
 const handleStart = (e: MouseEvent | TouchEvent) => {
   isDragging.value = true;
   const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
@@ -37,7 +73,7 @@ const handleStart = (e: MouseEvent | TouchEvent) => {
     const moveY = 'touches' in e ? e.touches[0].clientY : e.clientY;
     position.value = {
       x: Math.max(0, Math.min(window.innerWidth - 60, moveX - startX)),
-      y: Math.max(0, Math.min(window.innerHeight - 60, moveY - startY))
+      y: Math.max(0, Math.min(window.innerHeight - 60, moveY - startY)),
     };
   };
 
@@ -54,50 +90,79 @@ const handleStart = (e: MouseEvent | TouchEvent) => {
   document.addEventListener('touchmove', handleMove);
   document.addEventListener('touchend', handleEnd);
 };
+
+// Auto-scroll to newest log
+watch(
+  () => debugStore.logs.length,
+  async () => {
+    await nextTick();
+    if (logsContainer.value) {
+      try {
+        logsContainer.value.scrollTo({
+          top: logsContainer.value.scrollHeight,
+          behavior: 'smooth',
+        });
+      } catch {
+        logsContainer.value.scrollTop = logsContainer.value.scrollHeight;
+      }
+    }
+  }
+);
+
+onMounted(async () => {
+  await nextTick();
+  if (logsContainer.value) logsContainer.value.scrollTop = logsContainer.value.scrollHeight;
+});
 </script>
 
 <template>
-  <div v-if="debugStore.isVisible" class="debug-console" :style="{ left: position.x + 'px', top: position.y + 'px' }">
-    <div 
+  <div v-if="debugStore.isVisible">
+    <!-- Minimized draggable icon -->
+    <div
       v-if="!isOpen"
       class="debug-icon"
+      :style="iconStyle()"
       @mousedown="handleStart"
       @touchstart="handleStart"
       @click="!isDragging && (isOpen = true)"
     >
       <MaterialSymbolsBugReport class="text-2xl" />
     </div>
-    
-    <div v-else class="debug-panel">
-      <div class="debug-header" @mousedown="handleStart" @touchstart="handleStart">
+
+    <!-- Fullscreen Debug Panel -->
+    <div v-else class="debug-panel fullscreen">
+      <div class="debug-header">
         <span>Debug Console</span>
         <div class="debug-controls">
-          <MaterialSymbolsDelete 
-            class="control-btn" 
-            @click="debugStore.clearLogs()" 
+          <MaterialSymbolsDelete
+            class="control-btn"
+            @click="debugStore.clearLogs()"
             title="Clear logs"
           />
-          <MaterialSymbolsMinimize 
-            class="control-btn" 
-            @click="isOpen = false" 
+          <MaterialSymbolsContentCopy
+            class="control-btn"
+            @click="copyAll()"
+            title="Copy all logs"
+          />
+          <MaterialSymbolsMinimize
+            class="control-btn"
+            @click="isOpen = false"
             title="Minimize"
           />
-          <MaterialSymbolsClose 
-            class="control-btn" 
-            @click="debugStore.hideConsole()" 
+          <MaterialSymbolsClose
+            class="control-btn"
+            @click="debugStore.hideConsole()"
             title="Close"
           />
         </div>
       </div>
-      
-      <div class="debug-logs">
-        <div 
-          v-for="log in debugStore.logs" 
-          :key="log.id" 
-          class="log-entry"
-        >
+
+      <div class="debug-logs" ref="logsContainer">
+        <div v-for="log in debugStore.logs" :key="log.id" class="log-entry">
           <span class="log-time">{{ formatTime(log.timestamp) }}</span>
-          <span class="log-level" :class="getLogColor(log.level)">[{{ log.level.toUpperCase() }}]</span>
+          <span class="log-level" :class="getLogColor(log.level)">
+            [{{ log.level.toUpperCase() }}]
+          </span>
           <span class="log-message">{{ log.message }}</span>
         </div>
         <div v-if="debugStore.logs.length === 0" class="no-logs">
@@ -109,12 +174,6 @@ const handleStart = (e: MouseEvent | TouchEvent) => {
 </template>
 
 <style scoped>
-.debug-console {
-  position: fixed;
-  z-index: 9999;
-  user-select: none;
-}
-
 .debug-icon {
   width: 50px;
   height: 50px;
@@ -129,15 +188,18 @@ const handleStart = (e: MouseEvent | TouchEvent) => {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
-.debug-panel {
-  width: 400px;
-  height: 300px;
+.debug-panel.fullscreen {
+  position: fixed;
+  inset: 0;
+  top: 5vh;
+  width: 100vw;
+  height: 95vh;
   background: #1a1a1a;
   border: 2px solid #333;
-  border-radius: 8px;
   display: flex;
   flex-direction: column;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 10000;
 }
 
 .debug-header {
@@ -147,7 +209,6 @@ const handleStart = (e: MouseEvent | TouchEvent) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  cursor: move;
   color: #fff;
   font-weight: bold;
 }
@@ -174,6 +235,7 @@ const handleStart = (e: MouseEvent | TouchEvent) => {
   padding: 8px;
   font-family: monospace;
   font-size: 12px;
+  user-select: text;
 }
 
 .log-entry {

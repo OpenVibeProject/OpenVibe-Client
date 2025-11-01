@@ -32,6 +32,29 @@ npm install
 npm run dev
 ```
 
+## Transport Selection
+
+```mermaid
+flowchart TD
+    A["Start / First Connection Attempt"] --> B{"Is Bluetooth available?"}
+    
+    B -->|Yes| C["Connect via Bluetooth"]
+    B -->|No| D{"Is Wi-Fi paired / available?"}
+    
+    D -->|Yes| E["Connect via Wi-Fi (Local Network)"]
+    D -->|No| F{"Is Remote available?"}
+    
+    F -->|Yes| G["Connect via Remote Socket"]
+    F -->|No| H["Connection Failed / Retry"]
+
+    %% Describe priority order visually
+    subgraph Priority
+        P1["Wi-Fi: Highest priority when available"]
+        P2["Bluetooth: Default / First connection"]
+        P3["Remote: Fallback option"]
+    end
+```
+
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE) for details.
