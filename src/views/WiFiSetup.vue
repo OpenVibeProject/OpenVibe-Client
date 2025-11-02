@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, onUnmounted, watch } from 'vue';
+import { onMounted, ref, onUnmounted } from 'vue';
 import { IonContent, IonPage } from '@ionic/vue';
 import { WifiWizard2 } from '@awesome-cordova-plugins/wifi-wizard-2';
 import MaterialSymbolsWifiSharp from '~icons/material-symbols/wifi-sharp';
@@ -8,6 +8,7 @@ import { useDebugStore } from '@/stores/debug';
 import MaterialSymbolsLockOutline from '~icons/material-symbols/lock-outline';
 import WiFiCredentialsModal from '@/components/WiFiCredentialsModal.vue';
 import router from '@/router'
+import { LogLevel } from '@/types/LogLevel';
 
 interface WiFiNetwork
 {
@@ -90,10 +91,9 @@ const showCustomModal = () =>
 };
 
 const onNotification = (payload: any) => {
-  // payload has { raw, parsed }
-  debugStore.addLog('debug', `BLE notification received: ${String(payload.raw)}`);
+  debugStore.addLog(LogLevel.DEBUG, `BLE notification received: ${String(payload.raw)}`);
   if (payload.parsed) {
-    debugStore.addLog('info', `BLE StatusResponse: ${JSON.stringify(payload.parsed)}`);
+    debugStore.addLog(LogLevel.INFO, `BLE StatusResponse: ${JSON.stringify(payload.parsed)}`);
     if (payload.parsed && typeof payload.parsed === 'object' && 'wifiConnected' in payload.parsed && payload.parsed.wifiConnected) {
       router.push('/');
     }
@@ -102,18 +102,7 @@ const onNotification = (payload: any) => {
 
 onMounted(async () => {
   await scanNetworks();
-  // attach to BLE notifications emitted by store
-  bleStore.on('notifying', (msg) => {
-    debugStore.addLog('debug', `BLE notifying: ${msg}`);
-  })
-  bleStore.on('error', (msg) => {
-    debugStore.addLog('error', `BLE error: ${msg}`);
-  })
-    bleStore.on('warn', (msg) => {
-    debugStore.addLog('warn', `BLE error: ${msg}`);
-  })
   unsub = bleStore.on('notification', onNotification);
-  // if device already connected, the store will have started notifications
 });
 
 onUnmounted(() => {

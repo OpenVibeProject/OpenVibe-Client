@@ -1,10 +1,11 @@
+import { LogLevel } from '@/types/LogLevel';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 
 export interface LogEntry {
   id: number;
   timestamp: Date;
-  level: 'info' | 'warn' | 'error' | 'debug';
+  level: LogLevel;
   message: string;
 }
 
@@ -31,12 +32,12 @@ export const useDebugStore = defineStore('debug', () => {
   };
 
   const showConsole = () => {
-    addLog('info', 'Debug console opened');
+    addLog(LogLevel.INFO, 'Debug console opened');
     isVisible.value = true;
   };
 
   const hideConsole = () => {
-    addLog('info', 'Debug console closed');
+    addLog(LogLevel.INFO, 'Debug console closed');
     isVisible.value = false;
   };
 

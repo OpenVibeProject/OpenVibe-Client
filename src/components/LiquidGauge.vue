@@ -2,7 +2,8 @@
 import { computed, ref, onMounted, onUnmounted } from "vue";
 import { Roller } from "vue-roller";
 import "vue-roller/dist/style.css";
-import vibrator from '../../public/vibrator.png'
+import vibrator from '/vibrator.png'
+import { getIntensityColor, getIntensityGradient } from '../utils/colorUtils';
 
 interface Props {
   battery: number;
@@ -13,24 +14,8 @@ const props = defineProps<Props>();
 
 const clamped = computed(() => Math.min(100, Math.max(0, props.battery)));
 
-const fillColor = computed(() => {
-  const p = clamped.value;
-  let r, g, b;
-  
-  if (p >= 50) {
-    const t = (p - 50) / 50;
-    r = Math.round(255 * (1 - t) + 166 * t);
-    g = Math.round(255 * (1 - t) + 227 * t);
-    b = Math.round(0 * (1 - t) + 161 * t);
-  } else {
-    const t = p / 50;
-    r = 255;
-    g = Math.round(255 * t);
-    b = 0;
-  }
-  
-  return `rgb(${r},${g},${b})`;
-});
+const fillColor = computed(() => getIntensityColor(clamped.value));
+const gradientStops = computed(() => getIntensityGradient(clamped.value));
 
 const currentLevel = ref(0);
 const targetLevel = computed(() => 205 - (clamped.value / 100) * 200);
@@ -63,8 +48,6 @@ const animate = () => {
   animationId = requestAnimationFrame(animate);
 };
 
-
-
 onMounted(() => {
   currentLevel.value = targetLevel.value;
   animate();
@@ -84,8 +67,7 @@ onUnmounted(() => {
           <circle cx="100" cy="100" r="95" />
         </clipPath>
         <linearGradient id="waveGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" :stop-color="fillColor" stop-opacity="0.8" />
-          <stop offset="100%" :stop-color="fillColor" stop-opacity="1" />
+          <stop v-for="stop in gradientStops" :key="stop.position" :offset="`${stop.position}%`" :stop-color="stop.color" />
         </linearGradient>
       </defs>
       
@@ -93,7 +75,7 @@ onUnmounted(() => {
 
       <g clip-path="url(#clip-circle)">
         <path :d="wave2Path" fill="url(#waveGradient)" opacity="0.6" />
-        <path :d="wave1Path" :fill="fillColor" opacity="0.8" />
+        <path :d="wave1Path" fill="url(#waveGradient)" opacity="0.8" />
       </g>
     </svg>
     <div class="percentage-panel" :style="{color: fillColor}">

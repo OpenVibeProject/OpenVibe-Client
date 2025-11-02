@@ -6,6 +6,7 @@ import MaterialSymbolsClose from '~icons/material-symbols/close';
 import MaterialSymbolsDelete from '~icons/material-symbols/delete';
 import MaterialSymbolsMinimize from '~icons/material-symbols/minimize';
 import MaterialSymbolsContentCopy from '~icons/material-symbols/content-copy';
+import { LogLevel } from '@/types/LogLevel';
 
 const debugStore = useDebugStore();
 const isOpen = ref(false);
@@ -31,7 +32,7 @@ const copyAll = async () => {
 
     if (navigator.clipboard && navigator.clipboard.writeText) {
       await navigator.clipboard.writeText(text);
-      debugStore.addLog('info', 'Copied debug console content to clipboard');
+      debugStore.addLog(LogLevel.INFO, 'Copied debug console content to clipboard');
     } else {
       const ta = document.createElement('textarea');
       ta.value = text;
@@ -39,10 +40,10 @@ const copyAll = async () => {
       ta.select();
       document.execCommand('copy');
       document.body.removeChild(ta);
-      debugStore.addLog('info', 'Copied debug console content to clipboard (fallback)');
+      debugStore.addLog(LogLevel.INFO, 'Copied debug console content to clipboard (fallback)');
     }
   } catch (e) {
-    debugStore.addLog('error', `Failed to copy debug logs: ${e}`);
+    debugStore.addLog(LogLevel.ERROR, `Failed to copy debug logs: ${e}`);
   }
 };
 
@@ -60,7 +61,6 @@ const getLogColor = (level: string) => {
   return colors[level as keyof typeof colors] || 'text-gray-400';
 };
 
-// Draggable behavior for minimized icon
 const handleStart = (e: MouseEvent | TouchEvent) => {
   isDragging.value = true;
   const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
@@ -91,7 +91,6 @@ const handleStart = (e: MouseEvent | TouchEvent) => {
   document.addEventListener('touchend', handleEnd);
 };
 
-// Auto-scroll to newest log
 watch(
   () => debugStore.logs.length,
   async () => {
@@ -117,7 +116,6 @@ onMounted(async () => {
 
 <template>
   <div v-if="debugStore.isVisible">
-    <!-- Minimized draggable icon -->
     <div
       v-if="!isOpen"
       class="debug-icon"
@@ -129,7 +127,6 @@ onMounted(async () => {
       <MaterialSymbolsBugReport class="text-2xl" />
     </div>
 
-    <!-- Fullscreen Debug Panel -->
     <div v-else class="debug-panel fullscreen">
       <div class="debug-header">
         <span>Debug Console</span>

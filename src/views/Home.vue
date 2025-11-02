@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { IonPage, IonContent } from '@ionic/vue';
 import LiquidGauge from '../components/LiquidGauge.vue';
 import router from '../router';
 import { Roller } from 'vue-roller';
+import { getIntensityColor } from '../utils/colorUtils';
 
 const sliderValue = ref(50);
 const percentage = ref(50);
@@ -14,36 +15,30 @@ const onSliderRelease = () =>
     percentage.value = sliderValue.value;
 };
 
-const fillColor = computed(() =>
-{
-    const p = sliderValue.value;
-    let r, g, b;
-
-    if (p >= 50)
-    {
-        const t = (p - 50) / 50;
-        r = Math.round(255 * (1 - t) + 166 * t);
-        g = Math.round(255 * (1 - t) + 227 * t);
-        b = Math.round(0 * (1 - t) + 161 * t);
-    } else
-    {
-        const t = p / 50;
-        r = 255;
-        g = Math.round(255 * t);
-        b = 0;
-    }
-
-    return `rgb(${r},${g},${b})`;
-});
+const fillColor = computed(() => getIntensityColor(sliderValue.value));
 
 const sliderBackground = computed(() =>
 {
-    return `linear-gradient(to right, ${fillColor.value} ${sliderValue.value}%, #333 ${sliderValue.value}%)`;
+    const baseColor = fillColor.value;
+    const match = baseColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+    if (match) {
+        const [, r, g, b] = match.map(Number);
+        const lightColor = `rgb(${Math.min(255, r + 50)}, ${Math.min(255, g + 50)}, ${Math.min(255, b + 50)})`;
+        const darkColor = `rgb(${Math.max(0, r - 50)}, ${Math.max(0, g - 50)}, ${Math.max(0, b - 50)})`;
+        return `linear-gradient(to right, ${lightColor} 0%, ${baseColor} ${sliderValue.value/2}%, ${darkColor} ${sliderValue.value}%, #333 ${sliderValue.value}%)`;
+    }
+    return `linear-gradient(to right, ${baseColor} 0%, ${baseColor} ${sliderValue.value}%, #333 ${sliderValue.value}%)`;
 });
 
-const knobLabelPosition = computed(() =>
+const rollerValue = computed(() => `${sliderValue.value}%`);
+
+onMounted(async () =>
 {
-    return `${sliderValue.value / 1.14}%`;
+    for (let i = 0; i <= 50; i += 1)
+    {
+        sliderValue.value = i;
+        await new Promise((resolve) => setTimeout(resolve, 1));
+    }
 });
 </script>
 
@@ -53,7 +48,7 @@ const knobLabelPosition = computed(() =>
             <div class="flex flex-col justify-center items-center h-full px-8">
                 <LiquidGauge :battery="percentage" :intensity="percentage" />
                 <h1 class="text-4xl mt-4">Status</h1>
-                <div v-if="isOnline" class="flex gap-2 flex-row justify-center items-center text-green-500">
+                <div v-if="isOnline" class="flex gap-2 flex-row justify-center items-center text-green-400">
                     <h2 class="text-lg">⬤</h2>
                     <h2 class="text-lg mt-1">Online</h2>
                 </div>
@@ -70,7 +65,7 @@ const knobLabelPosition = computed(() =>
                             @change="onSliderRelease" />
 
                         <div :class="sliderValue > 40 ? 'text-black' : 'text-white'" class="slider-center-text mt-2 font-bold text-xl">
-                            <Roller :duration="100" :value="sliderValue.toString() + '%'" />
+                            <Roller :duration="100" :value="rollerValue" />
                         </div>
 
                     </div>

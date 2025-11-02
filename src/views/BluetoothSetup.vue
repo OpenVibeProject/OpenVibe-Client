@@ -6,6 +6,7 @@ import { useDebugStore } from '@/stores/debug';
 import { IonPage, IonContent } from '@ionic/vue';
 import { BleClient, ScanResult } from '@capacitor-community/bluetooth-le';
 import MaterialSymbolsBluetooth from '~icons/material-symbols/bluetooth';
+import { LogLevel } from '@/types/LogLevel';
 
 const isBluetoothAvailable = ref(false);
 
@@ -20,11 +21,10 @@ const bleStore = useBleStore();
 const debugStore = useDebugStore();
 const router = useRouter();
 
-// timers and constants for automatic rescanning
 let rescanTimer: number | undefined;
 let scanTimeout: number | undefined;
-const RESCAN_DELAY_MS = 3000; // wait 3s before rescanning after timeout
-const SCAN_TIMEOUT_MS = 10000; // scan duration before timeout (ms)
+const RESCAN_DELAY_MS = 3000;
+const SCAN_TIMEOUT_MS = 10000;
 
 const scanForDevices = async () =>
 {
@@ -38,17 +38,15 @@ const scanForDevices = async () =>
 
     await BleClient.initialize();
 
-    debugStore.addLog('debug', 'Starting BLE scan');
+    debugStore.addLog(LogLevel.DEBUG, 'Starting BLE scan');
 
         await BleClient.requestLEScan({}, (result) =>
         {
-            // aggiungi il dispositivo alla lista se nuovo
             if (!devices.value.find(d => d.device.deviceId === result.device.deviceId))
             {
                 devices.value.push(result);
-                // loggare i dispositivi trovati nella debug store invece che nella UI
                 const name = (result.localName ?? result.device?.name ?? result.device.deviceId).toString();
-                debugStore.addLog('debug', `Bluetooth: found device ${name} (${result.device.deviceId}) rssi=${result.rssi}`);
+                debugStore.addLog(LogLevel.DEBUG, `Bluetooth: found device ${name} (${result.device.deviceId}) rssi=${result.rssi}`);
             }
 
             // verifica se è il dispositivo target
@@ -56,12 +54,10 @@ const scanForDevices = async () =>
             if (!targetFound.value && name.startsWith(targetPrefix))
             {
                 targetFound.value = true;
-                // uso IIFE async per fermare la scansione e connettere
                 (async () =>
                 {
                     try
                     {
-                        // stop the scan and clear any scheduled timeouts
                         try { await BleClient.stopLEScan(); } catch (e) {}
                         if (scanTimeout) { clearTimeout(scanTimeout); scanTimeout = undefined; }
                         if (rescanTimer) { clearTimeout(rescanTimer); rescanTimer = undefined; }
@@ -82,7 +78,7 @@ const scanForDevices = async () =>
             {
                 try { await BleClient.stopLEScan(); } catch (e) {}
                 isScanning.value = false;
-                debugStore.addLog('debug', `Scan timed out - scheduling rescan in ${RESCAN_DELAY_MS/1000}s`);
+                debugStore.addLog(LogLevel.DEBUG, `Scan timed out - scheduling rescan in ${RESCAN_DELAY_MS/1000}s`);
 
                 // se non abbiamo trovato il target, pianifica un nuovo tentativo dopo un breve ritardo
                 if (!targetFound.value && !isConnecting.value)
@@ -91,13 +87,13 @@ const scanForDevices = async () =>
                     {
                         if (!isScanning.value && !isConnecting.value)
                         {
-                            debugStore.addLog('debug', 'Rescanning for OpenVibe devices');
+                            debugStore.addLog(LogLevel.DEBUG, 'Rescanning for OpenVibe devices');
                             await scanForDevices();
                         }
                     }, RESCAN_DELAY_MS);
                 }
             }
-        }, SCAN_TIMEOUT_MS); // SCAN_TIMEOUT_MS
+        }, SCAN_TIMEOUT_MS);
     } catch (error)
     {
         console.error('Bluetooth scan error:', error);
@@ -110,13 +106,11 @@ const connectToDevice = async (device: ScanResult) =>
     try
     {
         const deviceId = device.device.deviceId;
-        // Use the centralized ble store to connect so it can start notifications and manage state
         const ok = await bleStore.connectToDevice(deviceId, device);
         isConnecting.value = false;
         if (ok) {
             router.push('/wifi-setup');
         } else {
-            // connection failed inside the store
             targetFound.value = false;
             await scanForDevices();
         }
@@ -126,7 +120,6 @@ const connectToDevice = async (device: ScanResult) =>
         targetFound.value = false;
         alert('Failed to connect: ' + error);
         console.error('Failed to connect:', error);
-        // optionally restart scanning
         await scanForDevices();
     }
 };
