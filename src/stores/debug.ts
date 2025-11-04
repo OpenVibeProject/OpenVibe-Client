@@ -1,13 +1,7 @@
+import { LogEntry } from '@/types/LogEntry';
 import { LogLevel } from '@/types/LogLevel';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-
-export interface LogEntry {
-  id: number;
-  timestamp: Date;
-  level: LogLevel;
-  message: string;
-}
 
 export const useDebugStore = defineStore('debug', () => {
   const logs = ref<LogEntry[]>([]);

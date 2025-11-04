@@ -9,13 +9,7 @@ import MaterialSymbolsLockOutline from '~icons/material-symbols/lock-outline';
 import WiFiCredentialsModal from '@/components/WiFiCredentialsModal.vue';
 import router from '@/router'
 import { LogLevel } from '@/types/LogLevel';
-
-interface WiFiNetwork
-{
-  SSID: string;
-  level: number;
-  capabilities: string;
-}
+import { WiFiNetwork } from '@/types/WiFiNetwork';
 
 const bleStore = useBleStore();
 const debugStore = useDebugStore();
@@ -33,9 +27,6 @@ const scanNetworks = async () =>
     isScanning.value = true;
     const scanResults = await WifiWizard2.scan();
     networks.value = scanResults;
-  } catch (error)
-  {
-    console.error('WiFi scan error:', error);
   } finally
   {
     isScanning.value = false;
@@ -72,7 +63,6 @@ const connectToNetwork = async (data: { ssid: string; password: string }) =>
   } catch (error)
   {
     alert('Failed to send WiFi credentials: ' + error);
-    console.error('Connection error:', error);
   }
   showPasswordModal.value = false;
 };

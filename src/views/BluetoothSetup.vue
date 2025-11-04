@@ -26,6 +26,32 @@ let scanTimeout: number | undefined;
 const RESCAN_DELAY_MS = 3000;
 const SCAN_TIMEOUT_MS = 10000;
 
+const getDeviceName = (result: ScanResult): string => {
+    return (result.localName ?? result.device?.name ?? result.device.deviceId).toString();
+};
+
+const clearTimers = () => {
+    if (scanTimeout) { clearTimeout(scanTimeout); scanTimeout = undefined; }
+    if (rescanTimer) { clearTimeout(rescanTimer); rescanTimer = undefined; }
+};
+
+const resetScanState = () => {
+    isScanning.value = false;
+    isConnecting.value = false;
+    targetFound.value = false;
+};
+
+const scheduleRescan = () => {
+    if (!targetFound.value && !isConnecting.value) {
+        rescanTimer = window.setTimeout(async () => {
+            if (!isScanning.value && !isConnecting.value) {
+                debugStore.addLog(LogLevel.DEBUG, 'Rescanning for OpenVibe devices');
+                await scanForDevices();
+            }
+        }, RESCAN_DELAY_MS);
+    }
+};
+
 const scanForDevices = async () =>
 {
     if (isScanning.value || isConnecting.value) return;
@@ -36,34 +62,23 @@ const scanForDevices = async () =>
         devices.value = [];
         targetFound.value = false;
 
-    await BleClient.initialize();
+        await BleClient.initialize();
 
-    debugStore.addLog(LogLevel.DEBUG, 'Starting BLE scan');
+        debugStore.addLog(LogLevel.DEBUG, 'Starting BLE scan');
 
-        await BleClient.requestLEScan({}, (result) =>
-        {
-            if (!devices.value.find(d => d.device.deviceId === result.device.deviceId))
-            {
+        await BleClient.requestLEScan({}, (result) => {
+            if (!devices.value.find(d => d.device.deviceId === result.device.deviceId)) {
                 devices.value.push(result);
-                const name = (result.localName ?? result.device?.name ?? result.device.deviceId).toString();
+                const name = getDeviceName(result);
                 debugStore.addLog(LogLevel.DEBUG, `Bluetooth: found device ${name} (${result.device.deviceId}) rssi=${result.rssi}`);
             }
 
-            // verifica se è il dispositivo target
-            const name = (result.localName ?? result.device?.name ?? '').toString();
-            if (!targetFound.value && name.startsWith(targetPrefix))
-            {
+            const name = getDeviceName(result);
+            if (!targetFound.value && name.startsWith(targetPrefix)) {
                 targetFound.value = true;
-                (async () =>
-                {
-                    try
-                    {
-                        try { await BleClient.stopLEScan(); } catch (e) {}
-                        if (scanTimeout) { clearTimeout(scanTimeout); scanTimeout = undefined; }
-                        if (rescanTimer) { clearTimeout(rescanTimer); rescanTimer = undefined; }
-                    } catch (e) {
-                        // ignora
-                    }
+                (async () => {
+                    await BleClient.stopLEScan();
+                    clearTimers();
                     isScanning.value = false;
                     isConnecting.value = true;
                     await connectToDevice(result);
@@ -71,40 +86,21 @@ const scanForDevices = async () =>
             }
         });
 
-        // timeout generale di scansione (ferma se non troviamo il target)
-        scanTimeout = window.setTimeout(async () =>
-        {
-            if (isScanning.value)
-            {
-                try { await BleClient.stopLEScan(); } catch (e) {}
+        scanTimeout = window.setTimeout(async () => {
+            if (isScanning.value) {
+                await BleClient.stopLEScan();
                 isScanning.value = false;
-                debugStore.addLog(LogLevel.DEBUG, `Scan timed out - scheduling rescan in ${RESCAN_DELAY_MS/1000}s`);
-
-                // se non abbiamo trovato il target, pianifica un nuovo tentativo dopo un breve ritardo
-                if (!targetFound.value && !isConnecting.value)
-                {
-                    rescanTimer = window.setTimeout(async () =>
-                    {
-                        if (!isScanning.value && !isConnecting.value)
-                        {
-                            debugStore.addLog(LogLevel.DEBUG, 'Rescanning for OpenVibe devices');
-                            await scanForDevices();
-                        }
-                    }, RESCAN_DELAY_MS);
-                }
+                debugStore.addLog(LogLevel.DEBUG, `Scan timed out - scheduling rescan in ${RESCAN_DELAY_MS / 1000}s`);
+                scheduleRescan();
             }
         }, SCAN_TIMEOUT_MS);
-    } catch (error)
-    {
-        console.error('Bluetooth scan error:', error);
-        isScanning.value = false;
+    } catch (error) {
+        resetScanState();
     }
 };
 
-const connectToDevice = async (device: ScanResult) =>
-{
-    try
-    {
+const connectToDevice = async (device: ScanResult) => {
+    try {
         const deviceId = device.device.deviceId;
         const ok = await bleStore.connectToDevice(deviceId, device);
         isConnecting.value = false;
@@ -114,12 +110,9 @@ const connectToDevice = async (device: ScanResult) =>
             targetFound.value = false;
             await scanForDevices();
         }
-    } catch (error)
-    {
-        isConnecting.value = false;
-        targetFound.value = false;
+    } catch (error) {
+        resetScanState();
         alert('Failed to connect: ' + error);
-        console.error('Failed to connect:', error);
         await scanForDevices();
     }
 };
@@ -140,16 +133,16 @@ let bluetoothCheckInterval: number;
 
 onMounted(async () => {
     await checkBluetoothAvailability();
-    
+
     bluetoothCheckInterval = setInterval(async () => {
         const wasAvailable = isBluetoothAvailable.value;
         const isAvailable = await checkBluetoothAvailability();
-        
+
         if (!wasAvailable && isAvailable) {
             await scanForDevices();
         }
     }, 1000);
-    
+
     if (isBluetoothAvailable.value) {
         await scanForDevices();
     }
@@ -160,10 +153,9 @@ onUnmounted(() => {
         clearInterval(bluetoothCheckInterval);
     }
     if (isScanning.value) {
-        BleClient.stopLEScan().catch(()=>{});
+        BleClient.stopLEScan().catch(() => {});
     }
-    if (scanTimeout) { clearTimeout(scanTimeout); scanTimeout = undefined; }
-    if (rescanTimer) { clearTimeout(rescanTimer); rescanTimer = undefined; }
+    clearTimers();
 });
 </script>
 
@@ -176,9 +168,10 @@ onUnmounted(() => {
                     <p class="text-lg text-gray-400">First we’ll connect to your device using bluetooth</p>
                 </div>
                 <div class="search-container flex flex-col gap-15 justify-center items-center">
-                    <div class="bluetooth-search mx-auto mt-[10vh] rounded-full p-5" :class="isBluetoothAvailable ? '' : 'disabled'">
-                        <MaterialSymbolsBluetooth class="text-[10rem]" 
-                        :class="isBluetoothAvailable ? 'text-blue-500' : 'text-gray-500'" />
+                    <div class="bluetooth-search mx-auto mt-[10vh] rounded-full p-5"
+                        :class="isBluetoothAvailable ? '' : 'disabled'">
+                        <MaterialSymbolsBluetooth class="text-[10rem]"
+                            :class="isBluetoothAvailable ? 'text-blue-500' : 'text-gray-500'" />
                     </div>
 
                     <p v-if="!isBluetoothAvailable" class="text-xl">Please turn on the bluetooth</p>
