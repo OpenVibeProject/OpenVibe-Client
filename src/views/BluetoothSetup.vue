@@ -26,25 +26,32 @@ let scanTimeout: number | undefined;
 const RESCAN_DELAY_MS = 3000;
 const SCAN_TIMEOUT_MS = 10000;
 
-const getDeviceName = (result: ScanResult): string => {
+const getDeviceName = (result: ScanResult): string =>
+{
     return (result.localName ?? result.device?.name ?? result.device.deviceId).toString();
 };
 
-const clearTimers = () => {
+const clearTimers = () =>
+{
     if (scanTimeout) { clearTimeout(scanTimeout); scanTimeout = undefined; }
     if (rescanTimer) { clearTimeout(rescanTimer); rescanTimer = undefined; }
 };
 
-const resetScanState = () => {
+const resetScanState = () =>
+{
     isScanning.value = false;
     isConnecting.value = false;
     targetFound.value = false;
 };
 
-const scheduleRescan = () => {
-    if (!targetFound.value && !isConnecting.value) {
-        rescanTimer = window.setTimeout(async () => {
-            if (!isScanning.value && !isConnecting.value) {
+const scheduleRescan = () =>
+{
+    if (!targetFound.value && !isConnecting.value)
+    {
+        rescanTimer = window.setTimeout(async () =>
+        {
+            if (!isScanning.value && !isConnecting.value)
+            {
                 debugStore.addLog(LogLevel.DEBUG, 'Rescanning for OpenVibe devices');
                 await scanForDevices();
             }
@@ -66,17 +73,21 @@ const scanForDevices = async () =>
 
         debugStore.addLog(LogLevel.DEBUG, 'Starting BLE scan');
 
-        await BleClient.requestLEScan({}, (result) => {
-            if (!devices.value.find(d => d.device.deviceId === result.device.deviceId)) {
+        await BleClient.requestLEScan({}, (result) =>
+        {
+            if (!devices.value.find(d => d.device.deviceId === result.device.deviceId))
+            {
                 devices.value.push(result);
                 const name = getDeviceName(result);
                 debugStore.addLog(LogLevel.DEBUG, `Bluetooth: found device ${name} (${result.device.deviceId}) rssi=${result.rssi}`);
             }
 
             const name = getDeviceName(result);
-            if (!targetFound.value && name.startsWith(targetPrefix)) {
+            if (!targetFound.value && name.startsWith(targetPrefix))
+            {
                 targetFound.value = true;
-                (async () => {
+                (async () =>
+                {
                     await BleClient.stopLEScan();
                     clearTimers();
                     isScanning.value = false;
@@ -86,44 +97,55 @@ const scanForDevices = async () =>
             }
         });
 
-        scanTimeout = window.setTimeout(async () => {
-            if (isScanning.value) {
+        scanTimeout = window.setTimeout(async () =>
+        {
+            if (isScanning.value)
+            {
                 await BleClient.stopLEScan();
                 isScanning.value = false;
                 debugStore.addLog(LogLevel.DEBUG, `Scan timed out - scheduling rescan in ${RESCAN_DELAY_MS / 1000}s`);
                 scheduleRescan();
             }
         }, SCAN_TIMEOUT_MS);
-    } catch (error) {
+    } catch (error)
+    {
         resetScanState();
     }
 };
 
-const connectToDevice = async (device: ScanResult) => {
-    try {
+const connectToDevice = async (device: ScanResult) =>
+{
+    try
+    {
         const deviceId = device.device.deviceId;
         const ok = await bleStore.connectToDevice(deviceId, device);
         isConnecting.value = false;
-        if (ok) {
+        if (ok)
+        {
             router.push('/wifi-setup');
-        } else {
+        } else
+        {
             targetFound.value = false;
             await scanForDevices();
         }
-    } catch (error) {
+    } catch (error)
+    {
         resetScanState();
         alert('Failed to connect: ' + error);
         await scanForDevices();
     }
 };
 
-const checkBluetoothAvailability = async () => {
-    try {
+const checkBluetoothAvailability = async () =>
+{
+    try
+    {
         await BleClient.initialize();
         const isEnabled = await BleClient.isEnabled();
         isBluetoothAvailable.value = isEnabled;
         return isEnabled;
-    } catch (error) {
+    } catch (error)
+    {
         isBluetoothAvailable.value = false;
         return false;
     }
@@ -131,29 +153,36 @@ const checkBluetoothAvailability = async () => {
 
 let bluetoothCheckInterval: number;
 
-onMounted(async () => {
+onMounted(async () =>
+{
     await checkBluetoothAvailability();
 
-    bluetoothCheckInterval = setInterval(async () => {
+    bluetoothCheckInterval = setInterval(async () =>
+    {
         const wasAvailable = isBluetoothAvailable.value;
         const isAvailable = await checkBluetoothAvailability();
 
-        if (!wasAvailable && isAvailable) {
+        if (!wasAvailable && isAvailable)
+        {
             await scanForDevices();
         }
     }, 1000);
 
-    if (isBluetoothAvailable.value) {
+    if (isBluetoothAvailable.value)
+    {
         await scanForDevices();
     }
 });
 
-onUnmounted(() => {
-    if (bluetoothCheckInterval) {
+onUnmounted(() =>
+{
+    if (bluetoothCheckInterval)
+    {
         clearInterval(bluetoothCheckInterval);
     }
-    if (isScanning.value) {
-        BleClient.stopLEScan().catch(() => {});
+    if (isScanning.value)
+    {
+        BleClient.stopLEScan().catch(() => { });
     }
     clearTimers();
 });
@@ -177,6 +206,9 @@ onUnmounted(() => {
                     <p v-if="!isBluetoothAvailable" class="text-xl">Please turn on the bluetooth</p>
                     <p v-else class="text-xl">We're looking for your device</p>
                 </div>
+                <p class="mt-8 mx-auto underline cursor-pointer">
+                    <RouterLink to="remote-setup">Device far away?</RouterLink>
+                </p>
             </div>
         </ion-content>
     </ion-page>

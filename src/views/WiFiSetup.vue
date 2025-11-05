@@ -5,6 +5,7 @@ import { WifiWizard2 } from '@awesome-cordova-plugins/wifi-wizard-2';
 import MaterialSymbolsWifiSharp from '~icons/material-symbols/wifi-sharp';
 import { useBleStore } from '@/stores/ble';
 import { useDebugStore } from '@/stores/debug';
+import { useWebSocketStore } from '@/stores/websocket';
 import MaterialSymbolsLockOutline from '~icons/material-symbols/lock-outline';
 import WiFiCredentialsModal from '@/components/WiFiCredentialsModal.vue';
 import router from '@/router'
@@ -13,6 +14,7 @@ import { WiFiNetwork } from '@/types/WiFiNetwork';
 
 const bleStore = useBleStore();
 const debugStore = useDebugStore();
+const wsStore = useWebSocketStore();
 const networks = ref<WiFiNetwork[]>([]);
 const isScanning = ref(false);
 const showPasswordModal = ref(false);
@@ -85,7 +87,14 @@ const onNotification = (payload: any) => {
   if (payload.parsed) {
     debugStore.addLog(LogLevel.INFO, `BLE StatusResponse: ${JSON.stringify(payload.parsed)}`);
     if (payload.parsed && typeof payload.parsed === 'object' && 'wifiConnected' in payload.parsed && payload.parsed.wifiConnected) {
-      router.push('/');
+      if (payload.parsed.ip) {
+        debugStore.addLog(LogLevel.INFO, `Device IP received: ${payload.parsed.ip}`);
+        wsStore.connectToDevice(payload.parsed.ip);
+        bleStore.disconnect();
+        router.push('/');
+      } else {
+        router.push('/');
+      }
     }
   }
 };

@@ -13,6 +13,10 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/wifi-setup',
     component: () => import('../views/WiFiSetup.vue')
+  },
+  {
+    path: '/remote-setup',
+    component: () => import('../views/RemoteSetup.vue')
   }
 ]
 
