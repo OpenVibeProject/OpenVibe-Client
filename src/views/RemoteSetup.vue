@@ -3,15 +3,32 @@ import { ref, onMounted, onUnmounted, Ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useBleStore } from '@/stores/ble';
 import { useDebugStore } from '@/stores/debug';
+import { useServerStore } from '@/stores/server';
 import { IonPage, IonContent } from '@ionic/vue';
 import { LogLevel } from '@/types/LogLevel';
 import LucideServer from '~icons/lucide/server';
 import LucideTrash2 from '~icons/lucide/trash-2';
+import ServerModal from '@/components/ServerModal.vue';
 
-const deleteServer = () =>
-{
-    console.log('Delete server');
+const serverStore = useServerStore();
+const showServerModal = ref(false);
+
+const showCustomModal = () => {
+    showServerModal.value = true;
 };
+
+const handleModalDismiss = () => {
+    showServerModal.value = false;
+};
+
+const addServer = (data: { name: string; url: string }) => {
+    serverStore.addServer(data);
+    showServerModal.value = false;
+};
+
+onMounted(() => {
+    serverStore.loadServers();
+});
 </script>
 
 <template>
@@ -22,27 +39,35 @@ const deleteServer = () =>
                     <h1 class="text-3xl font-bold mb-5">Alright, No problem</h1>
                     <p class="text-lg text-gray-400">Let's connect to a remote server</p>
                 </div>
-                <div class="server-container max-h-[55vh] overflow-y-auto flex flex-col p-3 bg-zinc-800 cursor-pointer">
-                    <div class="server-item flex justify-between items-center p-2">
-                        <div class="w-full flex justify-between items-center">
-                            <div class="flex gap-4">
-                                <div class="flex flex-row gap-3 items-center">
-                                    <LucideServer class="text-blue-500 text-2xl" />
-                                </div>
-                                <div>
+                <div class="h-[55vh] overflow-y-auto">
+                    <div v-for="(server, index) in serverStore.servers" :key="server.url" class="server-container flex flex-col p-3 bg-zinc-800 cursor-pointer">
+                        <div class="server-item flex justify-between items-center p-2">
+                            <div class="w-full flex justify-between items-center">
+                                <div class="flex gap-4">
+                                    <div class="flex flex-row gap-3 items-center">
+                                        <LucideServer class="text-blue-500 text-2xl" />
+                                    </div>
                                     <div>
-                                        <h3 class="font-semibold text-xl">Server Name</h3>
-                                        <p class="text-sm text-gray">test.example.org:8080</p>
+                                        <div>
+                                            <h3 class="font-semibold text-xl">{{ server.name }}</h3>
+                                            <p class="text-sm text-gray">{{ server.url }}</p>
+                                        </div>
                                     </div>
                                 </div>
+                                <button @click.stop="serverStore.deleteServer(index)" class="text-red-500 hover:text-red-400 p-2">
+                                    <LucideTrash2 class="text-xl" />
+                                </button>
                             </div>
-                            <button @click.stop="deleteServer" class="text-red-500 hover:text-red-400 p-2">
-                                <LucideTrash2 class="text-xl" />
-                            </button>
                         </div>
                     </div>
                 </div>
-                <p class="text-center underline">I am self hosting</p>
+                <p @click="showCustomModal" class="text-center underline cursor-pointer mt-4 text-lg">I am self hosting</p>
+
+                <ServerModal 
+                    :is-open="showServerModal" 
+                    @dismiss="handleModalDismiss" 
+                    @add="addServer" 
+                />
             </div>
         </ion-content>
     </ion-page>

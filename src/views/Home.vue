@@ -5,14 +5,18 @@ import LiquidGauge from '../components/LiquidGauge.vue';
 import router from '../router';
 import { Roller } from 'vue-roller';
 import { getIntensityColor } from '../utils/colorUtils';
+import { useVibratorStore } from '@/stores/vibrator';
 
-const sliderValue = ref(50);
-const percentage = ref(50);
-const isOnline = ref(false);
+const vibratorStore = useVibratorStore();
+
+const sliderValue = ref(0);
+const battery = computed(() => vibratorStore.status?.battery || 0);
+const intensity = computed(() => vibratorStore.status?.intensity || 0);
+const isOnline = computed(() => vibratorStore.isConnected);
 
 const onSliderRelease = () =>
 {
-    percentage.value = sliderValue.value;
+    vibratorStore.setIntensity(sliderValue.value);
 };
 
 const fillColor = computed(() => getIntensityColor(sliderValue.value));
@@ -34,7 +38,7 @@ const rollerValue = computed(() => `${sliderValue.value}%`);
 
 onMounted(async () =>
 {
-    for (let i = 0; i <= 50; i += 1)
+    for (let i = 50; i >= 0; i -= 1)
     {
         sliderValue.value = i;
         await new Promise((resolve) => setTimeout(resolve, 1));
@@ -46,7 +50,7 @@ onMounted(async () =>
     <ion-page>
         <ion-content>
             <div class="flex flex-col justify-center items-center h-full px-8">
-                <LiquidGauge :battery="percentage" :intensity="percentage" />
+                <LiquidGauge :battery="battery" :intensity="intensity" />
                 <h1 class="text-4xl mt-4">Status</h1>
                 <div v-if="isOnline" class="flex gap-2 flex-row justify-center items-center text-green-400">
                     <h2 class="text-lg">⬤</h2>
@@ -61,7 +65,9 @@ onMounted(async () =>
                     <h1 class="text-2xl">Intensity</h1>
                     <div class="relative w-full">
                         <input type="range" min="0" max="100" step="1" v-model="sliderValue"
-                            class="custom-slider w-full" :style="{ background: sliderBackground }"
+                            class="custom-slider w-full" :class="{ 'disabled': !isOnline }"
+                            :style="{ background: sliderBackground }"
+                            :disabled="!isOnline"
                             @change="onSliderRelease" />
 
                         <div :class="sliderValue > 40 ? 'text-black' : 'text-white'" class="slider-center-text mt-2 font-bold text-xl">
@@ -78,6 +84,10 @@ onMounted(async () =>
                 <span class="btn bg-blue-500 rounded-lg p-2 mt-4 cursor-pointer hover:bg-blue-600 transition"
                     @click="router.push('/wifi-setup')">
                     Go To WiFi
+                </span>
+                <span class="btn bg-blue-500 rounded-lg p-2 mt-4 cursor-pointer hover:bg-blue-600 transition"
+                    @click="router.push('/remote-setup')">
+                    Go To Remote
                 </span>
             </div>
         </ion-content>
@@ -128,6 +138,21 @@ ion-content {
     border-radius: 50%;
     background: v-bind(fillColor);
     cursor: grab;
+}
+
+.custom-slider.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.custom-slider.disabled::-webkit-slider-thumb {
+    cursor: not-allowed;
+    background: #666;
+}
+
+.custom-slider.disabled::-moz-range-thumb {
+    cursor: not-allowed;
+    background: #666;
 }
 
 .slider-center-text {

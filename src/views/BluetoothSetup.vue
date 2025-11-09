@@ -7,7 +7,9 @@ import { IonPage, IonContent } from '@ionic/vue';
 import { BleClient, ScanResult } from '@capacitor-community/bluetooth-le';
 import MaterialSymbolsBluetooth from '~icons/material-symbols/bluetooth';
 import { LogLevel } from '@/types/LogLevel';
+import { useAppStore } from '@/stores/app';
 
+const appStore = useAppStore();
 const isBluetoothAvailable = ref(false);
 
 const devices = ref<ScanResult[]>([]) as Ref<ScanResult[]>;
@@ -122,6 +124,7 @@ const connectToDevice = async (device: ScanResult) =>
         isConnecting.value = false;
         if (ok)
         {
+            appStore.completeFirstSetup();
             router.push('/wifi-setup');
         } else
         {
@@ -206,7 +209,7 @@ onUnmounted(() =>
                     <p v-if="!isBluetoothAvailable" class="text-xl">Please turn on the bluetooth</p>
                     <p v-else class="text-xl">We're looking for your device</p>
                 </div>
-                <p class="mt-8 mx-auto underline cursor-pointer">
+                <p class="mt-8 mx-auto underline cursor-pointer text-lg">
                     <RouterLink to="remote-setup">Device far away?</RouterLink>
                 </p>
             </div>

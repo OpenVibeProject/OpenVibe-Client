@@ -22,7 +22,7 @@ const targetLevel = computed(() => 205 - (clamped.value / 100) * 200);
 
 const wave1Path = ref('');
 const wave2Path = ref('');
-const shakeSpeed = computed(() => props.intensity > 0 ? Math.max(0.05, 0.5 - (props.intensity / 100) * 0.4) : 0);
+const shakeSpeed = computed(() => props.intensity > 0 ? Math.max(0.1, 0.5 - (props.intensity / 100) * 0.4) : 0);
 let animationId: number;
 let time = 0;
 
@@ -60,7 +60,7 @@ onUnmounted(() => {
 
 <template>
   <div class="gauge">
-    <img class="vibrator absolute rotate-15 w-45 bottom-[-15px] left-10" :style="{ animationDuration: shakeSpeed > 0 ? `${shakeSpeed}s` : 'none' }" :class="{ 'shake-animation': props.intensity > 0 }" :src="vibrator">
+    <img class="vibrator absolute rotate-15 w-45 bottom-[-15px] left-10" :style="props.intensity > 0 ? { animationDuration: `${shakeSpeed}s` } : {}" :class="{ 'shake-animation': props.intensity > 0 }" :src="vibrator">
     <svg viewBox="0 0 200 200" class="gauge-svg">
       <defs>
         <clipPath id="clip-circle">

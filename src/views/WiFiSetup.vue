@@ -11,16 +11,22 @@ import WiFiCredentialsModal from '@/components/WiFiCredentialsModal.vue';
 import router from '@/router'
 import { LogLevel } from '@/types/LogLevel';
 import { WiFiNetwork } from '@/types/WiFiNetwork';
+import { WiFiCredentialsRequest } from '@/types/WiFiCredentialsRequest';
+import { WiFiCredentials } from '@/types/WiFiCredentials';
+import { RequestEnum } from '@/types/RequestEnum';
 
 const bleStore = useBleStore();
 const debugStore = useDebugStore();
 const wsStore = useWebSocketStore();
-const networks = ref<WiFiNetwork[]>([]);
+const networks = ref<WiFiNetwork[]>([
+
+]);
 const isScanning = ref(false);
 const showPasswordModal = ref(false);
 const selectedNetwork = ref<WiFiNetwork | null>(null);
 const isCustomNetwork = ref(false);
 let unsub: (() => void) | null = null;
+let scanInterval: number | undefined;
 
 const scanNetworks = async () =>
 {
@@ -48,14 +54,18 @@ const selectNetwork = (network: WiFiNetwork) =>
   }
 };
 
-const connectToNetwork = async (data: { ssid: string; password: string }) =>
+const connectToNetwork = async (data: WiFiCredentials) =>
 {
   try
   {
     if (bleStore.deviceId)
     {
-      const payload = JSON.stringify({ ssid: data.ssid, password: data.password });
-      await bleStore.writeCharacteristic(payload);
+      const connectionRequest: WiFiCredentialsRequest = {
+        requestType: RequestEnum.WIFI_CREDENTIALS,
+        ssid: data.ssid,
+        password: data.password
+      }
+      await bleStore.writeCharacteristic(JSON.stringify(connectionRequest));
       alert('WiFi credentials sent to device!');
     } else
     {
@@ -82,30 +92,39 @@ const showCustomModal = () =>
   showPasswordModal.value = true;
 };
 
-const onNotification = (payload: any) => {
+const onNotification = async (payload: any) =>
+{
   debugStore.addLog(LogLevel.DEBUG, `BLE notification received: ${String(payload.raw)}`);
-  if (payload.parsed) {
+  if (payload.parsed)
+  {
     debugStore.addLog(LogLevel.INFO, `BLE StatusResponse: ${JSON.stringify(payload.parsed)}`);
-    if (payload.parsed && typeof payload.parsed === 'object' && 'wifiConnected' in payload.parsed && payload.parsed.wifiConnected) {
-      if (payload.parsed.ip) {
+    if (payload.parsed && typeof payload.parsed === 'object' && 'wifiConnected' in payload.parsed && payload.parsed.wifiConnected)
+    {
+      if (payload.parsed.ip)
+      {
         debugStore.addLog(LogLevel.INFO, `Device IP received: ${payload.parsed.ip}`);
-        wsStore.connectToDevice(payload.parsed.ip);
-        bleStore.disconnect();
+        wsStore.connect(payload.parsed.ip);
+        await bleStore.disconnect();
         router.push('/');
-      } else {
+      } else
+      {
         router.push('/');
       }
     }
   }
 };
 
-onMounted(async () => {
+onMounted(async () =>
+{
   await scanNetworks();
   unsub = bleStore.on('notification', onNotification);
+  scanInterval = setInterval(scanNetworks, 10000);
 });
 
-onUnmounted(() => {
+onUnmounted(() =>
+{
   if (unsub) unsub();
+  if (scanInterval) clearInterval(scanInterval);
 });
 </script>
 
@@ -118,15 +137,15 @@ onUnmounted(() => {
           <p class="text-lg text-gray-400">Let’s connect your vibrator to the WI-FI</p>
         </div>
 
-        <div class="rounded-lg shadow-lg p-2">
-          <div v-if="networks.length > 0" class="max-h-[55vh] overflow-y-auto">
+        <div class="rounded-lg shadow-lg p-2 h-[55vh]">
+          <div v-if="networks.length > 0" class="h-[55vh] overflow-y-auto">
             <div v-for="network in networks" :key="network.SSID" @click="selectNetwork(network)"
-              class="p-3 bg-zinc-800 cursor-pointer networks-container hover:bg-zinc-700">
+              class="p-3 bg-zinc-800 cursor-pointer networks-container">
               <div class="flex justify-between items-center text-xl p-2">
                 <div class="w-full flex items-center justify-between">
                   <div class="flex flex-row gap-3 items-center">
                     <MaterialSymbolsWifiSharp class="text-blue-500 text-2xl" />
-                    <p>{{ network.SSID === '' ? 'Unknown' : network.SSID  }}</p>
+                    <p>{{ network.SSID === '' ? 'Unknown' : network.SSID }}</p>
                   </div>
                   <div class="text-xs text-gray-400">
                     <MaterialSymbolsLockOutline class="text-lg" v-if="network.capabilities?.includes('WPA')" />
@@ -136,21 +155,14 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
-
-        <div class="flex flex-row w-60 mx-auto justify-center gap-4 text-lg">
-          <span @click="showCustomModal" class="cursor-pointer hover:text-blue-400">Add custom</span>
-          •
-          <span class="cursor-pointer hover:text-blue-400" @click="router.push('/')">Skip for now</span>
-        </div>
       </div>
-
-      <WiFiCredentialsModal 
-        :is-open="showPasswordModal" 
-        :network="selectedNetwork" 
-        :is-custom="isCustomNetwork"
-        @dismiss="handleModalDismiss" 
-        @connect="connectToNetwork" 
-      />
+      <div class="flex flex-row w-60 mx-auto justify-center gap-4 text-lg mt-10">
+        <span @click="showCustomModal" class="underline">Add custom</span>
+        •
+        <span class="underline" @click="router.push('/')">Skip for now</span>
+      </div>
+      <WiFiCredentialsModal :is-open="showPasswordModal" :network="selectedNetwork" :is-custom="isCustomNetwork"
+        @dismiss="handleModalDismiss" @connect="connectToNetwork" />
     </ion-content>
   </ion-page>
 </template>

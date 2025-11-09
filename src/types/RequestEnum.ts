@@ -1,0 +1,5 @@
+export enum RequestEnum {
+    STATUS = 'STATUS',
+    INTENSITY = 'INTENSITY',
+    WIFI_CREDENTIALS = 'WIFI_CREDENTIALS'
+}

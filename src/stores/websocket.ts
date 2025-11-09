@@ -33,10 +33,15 @@ export const useWebSocketStore = defineStore('websocket', () => {
   const debugStore = useDebugStore();
 
   let ws: WebSocket | null = null;
+  let connectionTimeout: number | null = null;
 
-  function connectToDevice(ip: string) {
+  function connect(ip: string) {
     if (ws) {
       ws.close();
+    }
+
+    if (connectionTimeout) {
+      clearTimeout(connectionTimeout);
     }
 
     deviceIp.value = ip;
@@ -46,7 +51,21 @@ export const useWebSocketStore = defineStore('websocket', () => {
     
     ws = new WebSocket(wsUrl);
     
+    debugStore.addLog(LogLevel.DEBUG, JSON.stringify(ws));
+
+    connectionTimeout = setTimeout(() => {
+      if (ws && ws.readyState === WebSocket.CONNECTING) {
+        debugStore.addLog(LogLevel.ERROR, `WebSocket connection timeout to ${ip}`);
+        ws.close();
+        emitter.emit('error', new Error('Connection timeout'));
+      }
+    }, 10000);
+    
     ws.onopen = () => {
+      if (connectionTimeout) {
+        clearTimeout(connectionTimeout);
+        connectionTimeout = null;
+      }
       isConnected.value = true;
       debugStore.addLog(LogLevel.INFO, `WebSocket connected to ${ip}`);
       emitter.emit('connected', { ip });
@@ -63,6 +82,10 @@ export const useWebSocketStore = defineStore('websocket', () => {
     };
     
     ws.onclose = () => {
+      if (connectionTimeout) {
+        clearTimeout(connectionTimeout);
+        connectionTimeout = null;
+      }
       isConnected.value = false;
       deviceIp.value = null;
       debugStore.addLog(LogLevel.INFO, `WebSocket disconnected from ${ip}`);
@@ -76,6 +99,10 @@ export const useWebSocketStore = defineStore('websocket', () => {
   }
 
   function disconnect() {
+    if (connectionTimeout) {
+      clearTimeout(connectionTimeout);
+      connectionTimeout = null;
+    }
     if (ws) {
       ws.close();
       ws = null;
@@ -98,7 +125,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
   return {
     isConnected,
     deviceIp,
-    connectToDevice,
+    connect,
     disconnect,
     send,
     on: (ev: string, fn: Listener) => emitter.on(ev, fn),

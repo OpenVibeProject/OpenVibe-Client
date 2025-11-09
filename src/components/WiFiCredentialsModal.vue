@@ -3,6 +3,8 @@ import { ref, computed } from 'vue';
 import { IonModal } from '@ionic/vue';
 import { WiFiProps } from '@/types/WiFiProps';
 import { WiFiEmits } from '@/types/WiFiEmits';
+import { RequestEnum } from '@/types/RequestEnum';
+import { WiFiCredentialsRequest } from '@/types/WiFiCredentialsRequest';
 
 const props = defineProps<WiFiProps>();
 const emit = defineEmits<WiFiEmits>();
@@ -12,7 +14,12 @@ const customSSID = ref('');
 
 const handleConnect = () => {
   const ssid = props.isCustom ? customSSID.value : props.network?.SSID || '';
-  emit('connect', { ssid, password: password.value });
+  const connectionRequest: WiFiCredentialsRequest = {
+    requestType: RequestEnum.WIFI_CREDENTIALS,
+    ssid,
+    password: password.value
+  }
+  emit('connect', connectionRequest);
 };
 
 const handleDismiss = () => {
@@ -79,6 +86,7 @@ ion-modal {
   --height: auto;
   --background: #1a1a1a;
   --backdrop-opacity: 0.8;
+  --border-radius: 16px;
 }
 
 .modal-content {
