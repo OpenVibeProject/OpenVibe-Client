@@ -28,14 +28,14 @@ class Emitter {
 
 export const useWebSocketStore = defineStore('websocket', () => {
   const isConnected = ref(false);
-  const deviceIp = ref<string | null>(null);
+  const connectionTarget = ref<string | null>(null);
   const emitter = new Emitter();
   const debugStore = useDebugStore();
 
   let ws: WebSocket | null = null;
   let connectionTimeout: number | null = null;
 
-  function connect(ip: string) {
+  function connect(target: string) {
     if (ws) {
       ws.close();
     }
@@ -44,8 +44,10 @@ export const useWebSocketStore = defineStore('websocket', () => {
       clearTimeout(connectionTimeout);
     }
 
-    deviceIp.value = ip;
-    const wsUrl = `ws://${ip}:6969`;
+    connectionTarget.value = target;
+    const wsUrl = target.startsWith('ws://') || target.startsWith('wss://') 
+      ? target 
+      : `ws://${target}:6969`;
     
     debugStore.addLog(LogLevel.INFO, `Connecting to WebSocket: ${wsUrl}`);
     
@@ -55,7 +57,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
     connectionTimeout = setTimeout(() => {
       if (ws && ws.readyState === WebSocket.CONNECTING) {
-        debugStore.addLog(LogLevel.ERROR, `WebSocket connection timeout to ${ip}`);
+        debugStore.addLog(LogLevel.ERROR, `WebSocket connection timeout to ${target}`);
         ws.close();
         emitter.emit('error', new Error('Connection timeout'));
       }
@@ -67,8 +69,8 @@ export const useWebSocketStore = defineStore('websocket', () => {
         connectionTimeout = null;
       }
       isConnected.value = true;
-      debugStore.addLog(LogLevel.INFO, `WebSocket connected to ${ip}`);
-      emitter.emit('connected', { ip });
+      debugStore.addLog(LogLevel.INFO, `WebSocket connected to ${target}`);
+      emitter.emit('connected', { target });
     };
     
     ws.onmessage = (event) => {
@@ -87,8 +89,8 @@ export const useWebSocketStore = defineStore('websocket', () => {
         connectionTimeout = null;
       }
       isConnected.value = false;
-      deviceIp.value = null;
-      debugStore.addLog(LogLevel.INFO, `WebSocket disconnected from ${ip}`);
+      connectionTarget.value = null;
+      debugStore.addLog(LogLevel.INFO, `WebSocket disconnected from ${target}`);
       emitter.emit('disconnected');
     };
     
@@ -108,7 +110,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
       ws = null;
     }
     isConnected.value = false;
-    deviceIp.value = null;
+    connectionTarget.value = null;
   }
 
   function send(data: string | object) {
@@ -124,7 +126,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
   return {
     isConnected,
-    deviceIp,
+    connectionTarget,
     connect,
     disconnect,
     send,

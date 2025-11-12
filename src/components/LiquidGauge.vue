@@ -4,6 +4,7 @@ import { Roller } from "vue-roller";
 import "vue-roller/dist/style.css";
 import vibrator from '/vibrator.png'
 import { getIntensityColor, getIntensityGradient } from '../utils/colorUtils';
+import SettingsModal from './SettingsModal.vue';
 
 interface Props {
   battery: number;
@@ -11,6 +12,16 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+
+const showSettingsModal = ref(false);
+
+const openSettings = () => {
+  showSettingsModal.value = true;
+};
+
+const closeSettings = () => {
+  showSettingsModal.value = false;
+};
 
 const clamped = computed(() => Math.min(100, Math.max(0, props.battery)));
 
@@ -82,9 +93,14 @@ onUnmounted(() => {
         <Roller :duration="100" :value="clamped.toString()"/>
         <span>%</span>
     </div>
-    <div class="customize-button">
-      Customize
+    <div class="customize-button text-xl flex flex-row gap-1 cursor-pointer" @click="openSettings">
+      Settings
     </div>
+    
+    <SettingsModal 
+      :is-open="showSettingsModal" 
+      @dismiss="closeSettings" 
+    />
   </div>
 </template>
 
@@ -122,7 +138,7 @@ onUnmounted(() => {
 .customize-button {
   position: absolute;
   bottom: 20%;
-  right: -10%;
+  right: -8%;
   background-color: #333;
   border: #626262 1px solid;
   padding-top: 8px;
@@ -130,12 +146,9 @@ onUnmounted(() => {
   padding-left: 12px;
   padding-right: 12px;
   border-radius: 20px;
-  font-size: 1em;
   font-weight: bold;
-  cursor: pointer;
   z-index: 10;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
-  transition: background-color 0.3s, color 0.3s;
 }
 
 .percentage-text {

@@ -1,3 +1,5 @@
+import { TransportType } from "./TransportEnum";
+
 export type StatusResponse = {
     intensity: number;
     battery: number;
@@ -7,4 +9,7 @@ export type StatusResponse = {
     ipAddress: string | null;
     macAddress: string;
     version: string;
+    deviceId: string;
+    serverAddress: string | null;
+    transport: TransportType;
 }

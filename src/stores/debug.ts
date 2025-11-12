@@ -1,5 +1,4 @@
 import { LogEntry } from '@/types/LogEntry';
-import { LogLevel } from '@/types/LogLevel';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 
@@ -26,12 +25,10 @@ export const useDebugStore = defineStore('debug', () => {
   };
 
   const showConsole = () => {
-    addLog(LogLevel.INFO, 'Debug console opened');
     isVisible.value = true;
   };
 
   const hideConsole = () => {
-    addLog(LogLevel.INFO, 'Debug console closed');
     isVisible.value = false;
   };
 

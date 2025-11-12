@@ -2,7 +2,6 @@
 import { ref, computed, onMounted } from 'vue';
 import { IonPage, IonContent } from '@ionic/vue';
 import LiquidGauge from '../components/LiquidGauge.vue';
-import router from '../router';
 import { Roller } from 'vue-roller';
 import { getIntensityColor } from '../utils/colorUtils';
 import { useVibratorStore } from '@/stores/vibrator';
@@ -76,19 +75,6 @@ onMounted(async () =>
 
                     </div>
                 </div>
-
-                <span class="btn bg-blue-500 rounded-lg p-2 mt-6 cursor-pointer hover:bg-blue-600 transition"
-                    @click="router.push('/bluetooth-setup')">
-                    Go To Bluetooth
-                </span>
-                <span class="btn bg-blue-500 rounded-lg p-2 mt-4 cursor-pointer hover:bg-blue-600 transition"
-                    @click="router.push('/wifi-setup')">
-                    Go To WiFi
-                </span>
-                <span class="btn bg-blue-500 rounded-lg p-2 mt-4 cursor-pointer hover:bg-blue-600 transition"
-                    @click="router.push('/remote-setup')">
-                    Go To Remote
-                </span>
             </div>
         </ion-content>
     </ion-page>

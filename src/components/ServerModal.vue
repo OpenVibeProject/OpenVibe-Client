@@ -11,7 +11,7 @@ interface Emits {
   (e: 'add', data: { name: string; url: string }): void;
 }
 
-const props = defineProps<Props>();
+defineProps<Props>();
 const emit = defineEmits<Emits>();
 
 const serverName = ref('');
