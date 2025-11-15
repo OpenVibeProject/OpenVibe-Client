@@ -95,7 +95,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     };
     
     ws.onerror = (error) => {
-      debugStore.addLog(LogLevel.ERROR, `WebSocket error: ${error}`);
+      debugStore.addLog(LogLevel.ERROR, `WebSocket error: ${JSON.stringify(error)}`);
       emitter.emit('error', error);
     };
   }

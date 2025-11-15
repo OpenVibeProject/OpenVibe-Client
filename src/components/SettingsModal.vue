@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { IonModal, IonToggle, IonSelect, IonSelectOption } from '@ionic/vue';
 import { TransportType } from '@/types/TransportEnum';
+import { RequestEnum } from '@/types/RequestEnum';
+import { SwitchTransportRequest } from '@/types/SwitchTransportRequest';
 import { useTransportStore } from '@/stores/transport';
 import { useBleStore } from '@/stores/ble';
 import { useWebSocketStore } from '@/stores/websocket';
 import { useVibratorStore } from '@/stores/vibrator';
+import { useDebugStore } from '@/stores/debug';
+import { LogLevel } from '@/types/LogLevel';
 
 interface Props
 {
@@ -22,14 +26,70 @@ const emit = defineEmits<Emits>();
 
 const vibratorStore = useVibratorStore();
 const transportStore = useTransportStore();
+const bleStore = useBleStore();
+const wsStore = useWebSocketStore();
+const debugStore = useDebugStore();
 
 const preferredTransport = ref(TransportType.BLE);
 const bleEnabled = ref(true);
 const wifiEnabled = ref(true);
 const remoteEnabled = ref(true);
+const isLoading = ref(false);
+
+const sendSwitchTransportRequest = async (transport: TransportType) => {
+  if (isLoading.value) return;
+  
+  isLoading.value = true;
+  debugStore.addLog(LogLevel.INFO, `Switching to transport: ${transport}`);
+  
+  try {
+    const request: SwitchTransportRequest = {
+      requestType: RequestEnum.SWITCH_TRANSPORT,
+      transport
+    };
+    
+    // Send request on current transport
+    if (transportStore.currentTransport === TransportType.BLE && bleStore.isConnected) {
+      await bleStore.writeCharacteristic(JSON.stringify(request));
+    } else if ((transportStore.currentTransport === TransportType.WIFI || transportStore.currentTransport === TransportType.REMOTE) && wsStore.isConnected) {
+      wsStore.send(request);
+    }
+    
+    // Wait for response and handle transport switch
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Switch timeout')), 10000);
+      
+      const handleResponse = (data: any) => {
+        if (data.parsed?.requestType === RequestEnum.SWITCH_TRANSPORT) {
+          clearTimeout(timeout);
+          transportStore.setCurrentTransport(transport);
+          debugStore.addLog(LogLevel.INFO, `Transport switched to: ${transport}`);
+          resolve(data);
+        }
+      };
+      
+      if (transportStore.currentTransport === TransportType.BLE) {
+        bleStore.on('notification', handleResponse);
+      } else {
+        wsStore.on('message', handleResponse);
+      }
+    });
+    
+  } catch (error) {
+    debugStore.addLog(LogLevel.ERROR, `Transport switch failed: ${error}`);
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+watch(preferredTransport, (newTransport) => {
+  if (newTransport !== transportStore.currentTransport) {
+    sendSwitchTransportRequest(newTransport);
+  }
+});
 
 const deviceInfo = computed(() => ({
-    currentTransport: transportStore.currentTransport || 'None',
+    currentTransport: vibratorStore.status?.transport || 'None',
     macAddress: vibratorStore.status?.macAddress || 'N/A',
     ipAddress: vibratorStore.status?.ipAddress || 'N/A',
     deviceId: vibratorStore.status?.deviceId || 'N/A'
@@ -73,11 +133,12 @@ const handleDismiss = () =>
                 <!-- Preferred Transport -->
                 <div class="text-left">
                     <h3 class="text-md font-medium mb-3 text-gray-300">Preferred Transport</h3>
-                    <ion-select v-model="preferredTransport" interface="popover" class="transport-select">
+                    <ion-select v-model="preferredTransport" interface="popover" class="transport-select" :disabled="isLoading">
                         <ion-select-option :value="TransportType.BLE">Bluetooth</ion-select-option>
                         <ion-select-option :value="TransportType.WIFI">Wi-Fi</ion-select-option>
                         <ion-select-option :value="TransportType.REMOTE">Remote</ion-select-option>
                     </ion-select>
+                    <div v-if="isLoading" class="text-xs text-gray-400 mt-2">Switching transport...</div>
                 </div>
 
                 <!-- Transport Toggles -->

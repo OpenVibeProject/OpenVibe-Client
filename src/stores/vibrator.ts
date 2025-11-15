@@ -118,6 +118,9 @@ export const useVibratorStore = defineStore('vibrator', () => {
       } else if (connectionType.value === 'websocket') {
         wsStore.send(intensityRequest);
       }
+      
+      // Request status to update UI with new intensity
+      await requestStatus();
     } catch (error) {
       console.error('Failed to set intensity:', error);
     }
