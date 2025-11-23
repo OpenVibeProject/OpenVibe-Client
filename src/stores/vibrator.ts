@@ -4,11 +4,13 @@ import { StatusResponse } from '@/types/StatusResponse';
 import { useBleStore } from '@/stores/ble';
 import { useWebSocketStore } from '@/stores/websocket';
 import { RequestEnum } from '@/types/RequestEnum';
+import { TransportType } from '@/types/TransportEnum';
+import { STATUS_REQUEST_INTERVAL } from '@/constants';
 
 export const useVibratorStore = defineStore('vibrator', () => {
   const status = ref<StatusResponse | null>(null);
   const isConnected = ref(false);
-  const connectionType = ref<'ble' | 'websocket' | 'remote' | null>(null);
+  const connectionType = ref<TransportType | null>(null);
   const wsConnectionAttempted = ref(false);
 
   const bleStore = useBleStore();
@@ -23,38 +25,38 @@ export const useVibratorStore = defineStore('vibrator', () => {
 
   const initListeners = () => {
     bleConnectedUnsub = bleStore.on('notifying', () => {
-      setConnection('ble');
+      setConnection(TransportType.BLE);
       setInterval(() => {
         requestStatus();
-      }, 30000)
+      }, STATUS_REQUEST_INTERVAL)
       requestStatus();
     });
     
     bleNotificationUnsub = bleStore.on('notification', (payload: any) => {
-      if (payload.parsed && connectionType.value === 'ble') {
+      if (payload.parsed && connectionType.value === TransportType.BLE) {
         updateStatus(payload.parsed);
       }
     });
     
     bleDisconnectedUnsub = bleStore.on('disconnected', () => {
-      if (connectionType.value === 'ble') {
+      if (connectionType.value === TransportType.BLE) {
         clearConnection();
       }
     });
     
     wsConnectedUnsub = wsStore.on('connected', () => {
-      setConnection('websocket');
+      setConnection(TransportType.WIFI);
       requestStatus();
     });
     
     wsMessageUnsub = wsStore.on('message', (payload: any) => {
-      if (payload.parsed && connectionType.value === 'websocket') {
+      if (payload.parsed && (connectionType.value === TransportType.WIFI || connectionType.value === TransportType.REMOTE)) {
         updateStatus(payload.parsed);
       }
     });
     
     wsDisconnectedUnsub = wsStore.on('disconnected', () => {
-      if (connectionType.value === 'websocket') {
+      if (connectionType.value === TransportType.WIFI || connectionType.value === TransportType.REMOTE) {
         clearConnection();
       }
     });
@@ -73,13 +75,13 @@ export const useVibratorStore = defineStore('vibrator', () => {
     status.value = newStatus;
     
     if (newStatus.isWifiConnected && newStatus.ipAddress && 
-        connectionType.value !== 'websocket' && !wsStore.isConnected && !wsConnectionAttempted.value) {
+        connectionType.value !== TransportType.WIFI && !wsStore.isConnected && !wsConnectionAttempted.value) {
       wsConnectionAttempted.value = true;
       wsStore.connect(newStatus.ipAddress);
     }
   };
 
-  const setConnection = (type: 'ble' | 'websocket' | 'remote') => {
+  const setConnection = (type: TransportType) => {
     connectionType.value = type;
     isConnected.value = true;
   };
@@ -97,9 +99,9 @@ export const useVibratorStore = defineStore('vibrator', () => {
     const statusRequest = { requestType: RequestEnum.STATUS };
 
     try {
-      if (connectionType.value === 'ble') {
+      if (connectionType.value === TransportType.BLE) {
         await bleStore.writeCharacteristic(JSON.stringify(statusRequest));
-      } else if (connectionType.value === 'websocket') {
+      } else if (connectionType.value === TransportType.WIFI || connectionType.value === TransportType.REMOTE) {
         wsStore.send(statusRequest);
       }
     } catch (error) {
@@ -113,9 +115,9 @@ export const useVibratorStore = defineStore('vibrator', () => {
     const intensityRequest = { requestType: RequestEnum.INTENSITY, intensity };
 
     try {
-      if (connectionType.value === 'ble') {
+      if (connectionType.value === TransportType.BLE) {
         await bleStore.writeCharacteristic(JSON.stringify(intensityRequest));
-      } else if (connectionType.value === 'websocket') {
+      } else if (connectionType.value === TransportType.WIFI || connectionType.value === TransportType.REMOTE) {
         wsStore.send(intensityRequest);
       }
       

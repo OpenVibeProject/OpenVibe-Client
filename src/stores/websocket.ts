@@ -2,29 +2,8 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { useDebugStore } from '@/stores/debug';
 import { LogLevel } from '@/types/LogLevel';
-
-type Listener = (payload?: any) => void;
-
-class Emitter {
-  private listeners = new Map<string, Set<Listener>>();
-  on(event: string, fn: Listener) {
-    const s = this.listeners.get(event) ?? new Set();
-    s.add(fn);
-    this.listeners.set(event, s);
-    return () => this.off(event, fn);
-  }
-  off(event: string, fn: Listener) {
-    const s = this.listeners.get(event);
-    if (!s) return;
-    s.delete(fn);
-    if (s.size === 0) this.listeners.delete(event);
-  }
-  emit(event: string, payload?: any) {
-    const s = this.listeners.get(event);
-    if (!s) return;
-    for (const fn of Array.from(s)) fn(payload);
-  }
-}
+import { Emitter } from '@/utils/Emitter';
+import { WEBSOCKET_PORT, WEBSOCKET_CONNECTION_TIMEOUT } from '@/constants';
 
 export const useWebSocketStore = defineStore('websocket', () => {
   const isConnected = ref(false);
@@ -47,7 +26,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     connectionTarget.value = target;
     const wsUrl = target.startsWith('ws://') || target.startsWith('wss://') 
       ? target 
-      : `ws://${target}:6969`;
+      : `ws://${target}:${WEBSOCKET_PORT}`;
     
     debugStore.addLog(LogLevel.INFO, `Connecting to WebSocket: ${wsUrl}`);
     
@@ -61,7 +40,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
         ws.close();
         emitter.emit('error', new Error('Connection timeout'));
       }
-    }, 10000);
+    }, WEBSOCKET_CONNECTION_TIMEOUT);
     
     ws.onopen = () => {
       if (connectionTimeout) {
@@ -130,8 +109,8 @@ export const useWebSocketStore = defineStore('websocket', () => {
     connect,
     disconnect,
     send,
-    on: (ev: string, fn: Listener) => emitter.on(ev, fn),
-    off: (ev: string, fn: Listener) => emitter.off(ev, fn),
-    emit: (ev: string, payload?: any) => emitter.emit(ev, payload)
+    on: emitter.on.bind(emitter),
+    off: emitter.off.bind(emitter),
+    emit: emitter.emit.bind(emitter)
   };
 });

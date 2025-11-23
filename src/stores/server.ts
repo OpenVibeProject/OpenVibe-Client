@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
+import { DEFAULT_SERVER } from '@/constants';
 
 interface Server {
   name: string;
@@ -14,7 +15,7 @@ export const useServerStore = defineStore('server', () => {
     if (saved) {
       servers.value = JSON.parse(saved);
     } else {
-      servers.value = [{ name: 'OpenVibe', url: 'openvibe-server.duckdns.org:6969' }];
+      servers.value = [DEFAULT_SERVER];
     }
   };
 

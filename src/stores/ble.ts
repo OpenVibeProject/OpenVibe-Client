@@ -6,33 +6,8 @@ import { BLEEnum } from '@/types/BLEEnum';
 import { useDebugStore } from '@/stores/debug';
 import { useAppStore } from '@/stores/app';
 import { LogLevel } from '@/types/LogLevel';
-
-type Listener = (payload?: any) => void;
-
-class Emitter
-{
-  private listeners = new Map<string, Set<Listener>>();
-  on(event: string, fn: Listener)
-  {
-    const s = this.listeners.get(event) ?? new Set();
-    s.add(fn);
-    this.listeners.set(event, s);
-    return () => this.off(event, fn);
-  }
-  off(event: string, fn: Listener)
-  {
-    const s = this.listeners.get(event);
-    if (!s) return;
-    s.delete(fn);
-    if (s.size === 0) this.listeners.delete(event);
-  }
-  emit(event: string, payload?: any)
-  {
-    const s = this.listeners.get(event);
-    if (!s) return;
-    for (const fn of Array.from(s)) fn(payload);
-  }
-}
+import { Emitter } from '@/utils/Emitter';
+import { BLE_MAX_RECONNECT_ATTEMPTS, BLE_MAX_RECONNECT_DELAY } from '@/constants';
 
 export const useBleStore = defineStore('ble', () =>
 {
@@ -47,7 +22,6 @@ export const useBleStore = defineStore('ble', () =>
   let notificationUnsub: (() => Promise<void>) | null = null;
   let reconnectTimer: number | null = null;
   let reconnectAttempts = 0;
-  const maxReconnectAttempts = 5;
 
   function setConnection(id: string, scanResult: ScanResult | null = null)
   {
@@ -69,7 +43,7 @@ export const useBleStore = defineStore('ble', () =>
     debugStore.addLog(LogLevel.INFO, `BLE disconnected: ${prev ?? 'unknown'}`);
     emitter.emit('disconnected');
 
-    if (appStore.lastConnectedDeviceId && reconnectAttempts < maxReconnectAttempts)
+    if (appStore.lastConnectedDeviceId && reconnectAttempts < BLE_MAX_RECONNECT_ATTEMPTS)
     {
       startReconnection();
     }
@@ -79,16 +53,16 @@ export const useBleStore = defineStore('ble', () =>
   {
     if (reconnectTimer) clearTimeout(reconnectTimer);
 
-    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000); // Exponential backoff, max 30s
-    debugStore.addLog(LogLevel.INFO, `Attempting reconnection in ${delay}ms (attempt ${reconnectAttempts + 1}/${maxReconnectAttempts})`);
+    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), BLE_MAX_RECONNECT_DELAY);
+    debugStore.addLog(LogLevel.INFO, `Attempting reconnection in ${delay}ms (attempt ${reconnectAttempts + 1}/${BLE_MAX_RECONNECT_ATTEMPTS})`);
 
     reconnectTimer = setTimeout(async () =>
     {
       reconnectAttempts++;
       if (appStore.lastConnectedDeviceId)
       {
-        const success = await connectToDevice(appStore.lastConnectedDeviceId);
-        if (success)
+        await connectToDevice(appStore.lastConnectedDeviceId);
+        if (isConnected.value)
         {
           reconnectAttempts = 0;
         }
@@ -252,8 +226,8 @@ export const useBleStore = defineStore('ble', () =>
     disconnect,
     startNotifications,
     writeCharacteristic: send,
-    on: (ev: string, fn: Listener) => emitter.on(ev, fn),
-    off: (ev: string, fn: Listener) => emitter.off(ev, fn),
-    emit: (ev: string, payload?: any) => emitter.emit(ev, payload)
+    on: emitter.on.bind(emitter),
+    off: emitter.off.bind(emitter),
+    emit: emitter.emit.bind(emitter)
   };
 });

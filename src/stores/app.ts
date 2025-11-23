@@ -1,9 +1,10 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
+import { ThemeEnum } from '@/types/ThemeEnum';
 
 export const useAppStore = defineStore('app', () => {
   const isFirstSetup = ref(true);
-  const theme = ref<'light' | 'dark'>('dark');
+  const theme = ref<ThemeEnum>(ThemeEnum.DARK);
   const language = ref('en');
   const lastConnectedDeviceId = ref<string | null>(null);
 
@@ -12,7 +13,7 @@ export const useAppStore = defineStore('app', () => {
     saveSettings();
   }
 
-  function setTheme(newTheme: 'light' | 'dark') {
+  function setTheme(newTheme: ThemeEnum) {
     theme.value = newTheme;
     saveSettings();
   }
@@ -43,7 +44,7 @@ export const useAppStore = defineStore('app', () => {
       if (saved) {
         const settings = JSON.parse(saved);
         isFirstSetup.value = settings.isFirstSetup ?? true;
-        theme.value = settings.theme ?? 'dark';
+        theme.value = settings.theme ?? ThemeEnum.DARK;
         language.value = settings.language ?? 'en';
         lastConnectedDeviceId.value = settings.lastConnectedDeviceId ?? null;
       }
