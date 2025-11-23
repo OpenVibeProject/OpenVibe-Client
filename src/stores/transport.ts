@@ -16,7 +16,6 @@ export const useTransportStore = defineStore('transport', () => {
     const bleStore = useBleStore();
     const wsStore = useWebSocketStore();
 
-    // Send SWITCH_TRANSPORT packet on current channel
     if (currentTransport.value) {
       const switchTransportRequest: SwitchTransportRequest = { 
         requestType: RequestEnum.SWITCH_TRANSPORT,

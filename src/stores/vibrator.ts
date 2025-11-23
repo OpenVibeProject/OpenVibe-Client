@@ -3,8 +3,10 @@ import { ref } from 'vue';
 import { StatusResponse } from '@/types/StatusResponse';
 import { useBleStore } from '@/stores/ble';
 import { useWebSocketStore } from '@/stores/websocket';
+import { useDebugStore } from '@/stores/debug';
 import { RequestEnum } from '@/types/RequestEnum';
 import { TransportType } from '@/types/TransportEnum';
+import { LogLevel } from '@/types/LogLevel';
 import { STATUS_REQUEST_INTERVAL } from '@/constants';
 
 export const useVibratorStore = defineStore('vibrator', () => {
@@ -12,9 +14,12 @@ export const useVibratorStore = defineStore('vibrator', () => {
   const isConnected = ref(false);
   const connectionType = ref<TransportType | null>(null);
   const wsConnectionAttempted = ref(false);
+  const pendingTransport = ref<TransportType | null>(null);
+  let transportSwitchResolve: ((status: StatusResponse) => void) | null = null;
 
   const bleStore = useBleStore();
   const wsStore = useWebSocketStore();
+  const debugStore = useDebugStore();
 
   let bleConnectedUnsub: (() => void) | null = null;
   let bleNotificationUnsub: (() => void) | null = null;
@@ -72,7 +77,19 @@ export const useVibratorStore = defineStore('vibrator', () => {
   };
 
   const updateStatus = (newStatus: StatusResponse) => {
+    debugStore.addLog(LogLevel.DEBUG, `updateStatus: pending=${pendingTransport.value}, hasResolver=${!!transportSwitchResolve}`);
     status.value = newStatus;
+    
+    if (pendingTransport.value) {
+      debugStore.addLog(LogLevel.INFO, `Switching transport: ${connectionType.value} -> ${pendingTransport.value}`);
+      connectionType.value = pendingTransport.value;
+      pendingTransport.value = null;
+      if (transportSwitchResolve) {
+        debugStore.addLog(LogLevel.INFO, 'Resolving transport switch promise');
+        transportSwitchResolve(newStatus);
+        transportSwitchResolve = null;
+      }
+    }
     
     if (newStatus.isWifiConnected && newStatus.ipAddress && 
         connectionType.value !== TransportType.WIFI && !wsStore.isConnected && !wsConnectionAttempted.value) {
@@ -128,6 +145,33 @@ export const useVibratorStore = defineStore('vibrator', () => {
     }
   };
 
+  const switchTransport = async (newTransport: TransportType): Promise<StatusResponse> => {
+    debugStore.addLog(LogLevel.INFO, `switchTransport: ${connectionType.value} -> ${newTransport}, connected=${isConnected.value}`);
+    if (!isConnected.value) throw new Error('Not connected');
+
+    return new Promise((resolve, reject) => {
+      const switchRequest = { requestType: RequestEnum.SWITCH_TRANSPORT, transport: newTransport };
+      const payload = JSON.stringify(switchRequest);
+      pendingTransport.value = newTransport;
+      transportSwitchResolve = resolve;
+      debugStore.addLog(LogLevel.DEBUG, `Sending on ${connectionType.value}: ${payload}`);
+
+      try {
+        if (connectionType.value === TransportType.BLE) {
+          bleStore.writeCharacteristic(payload);
+        } else if (connectionType.value === TransportType.WIFI || connectionType.value === TransportType.REMOTE) {
+          wsStore.send(switchRequest);
+        }
+        debugStore.addLog(LogLevel.DEBUG, 'Switch request sent, waiting for STATUS response');
+      } catch (error) {
+        debugStore.addLog(LogLevel.ERROR, `Failed to switch transport: ${error}`);
+        pendingTransport.value = null;
+        transportSwitchResolve = null;
+        reject(error);
+      }
+    });
+  };
+
   initListeners();
 
   return {
@@ -139,6 +183,7 @@ export const useVibratorStore = defineStore('vibrator', () => {
     clearConnection,
     requestStatus,
     setIntensity,
+    switchTransport,
     cleanupListeners
   };
 });
