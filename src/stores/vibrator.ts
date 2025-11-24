@@ -77,24 +77,25 @@ export const useVibratorStore = defineStore('vibrator', () => {
   };
 
   const updateStatus = (newStatus: StatusResponse) => {
-    debugStore.addLog(LogLevel.DEBUG, `updateStatus: pending=${pendingTransport.value}, hasResolver=${!!transportSwitchResolve}`);
     status.value = newStatus;
     
     if (pendingTransport.value) {
       debugStore.addLog(LogLevel.INFO, `Switching transport: ${connectionType.value} -> ${pendingTransport.value}`);
-      connectionType.value = pendingTransport.value;
+      const targetTransport = pendingTransport.value;
+      connectionType.value = targetTransport;
       pendingTransport.value = null;
+      
+      // Connect to WebSocket if switching to WIFI or REMOTE
+      if ((targetTransport === TransportType.WIFI || targetTransport === TransportType.REMOTE) && newStatus.ipAddress) {
+        debugStore.addLog(LogLevel.INFO, `Connecting to WebSocket at ${newStatus.ipAddress}`);
+        wsStore.connect(newStatus.ipAddress);
+      }
+      
       if (transportSwitchResolve) {
         debugStore.addLog(LogLevel.INFO, 'Resolving transport switch promise');
         transportSwitchResolve(newStatus);
         transportSwitchResolve = null;
       }
-    }
-    
-    if (newStatus.isWifiConnected && newStatus.ipAddress && 
-        connectionType.value !== TransportType.WIFI && !wsStore.isConnected && !wsConnectionAttempted.value) {
-      wsConnectionAttempted.value = true;
-      wsStore.connect(newStatus.ipAddress);
     }
   };
 

@@ -15,11 +15,14 @@ export const useWebSocketStore = defineStore('websocket', () => {
   let connectionTimeout: number | null = null;
 
   function connect(target: string) {
+    debugStore.addLog(LogLevel.DEBUG, `WebSocket connect called with target: ${target}`);
     if (ws) {
+      debugStore.addLog(LogLevel.INFO, `WebSocket already exists, closing existing connection`);
       ws.close();
     }
 
     if (connectionTimeout) {
+      debugStore.addLog(LogLevel.INFO, `Clearing existing connection timeout`);
       clearTimeout(connectionTimeout);
     }
 
