@@ -4,29 +4,61 @@ import { useRouter } from 'vue-router';
 import { useBleStore } from '@/stores/ble';
 import { useDebugStore } from '@/stores/debug';
 import { useServerStore } from '@/stores/server';
+import { useVibratorStore } from '@/stores/vibrator';
 import { IonPage, IonContent } from '@ionic/vue';
 import { LogLevel } from '@/types/LogLevel';
 import LucideServer from '~icons/lucide/server';
 import LucideTrash2 from '~icons/lucide/trash-2';
 import ServerModal from '@/components/ServerModal.vue';
+import RemotePairingModal from '@/components/RemotePairingModal.vue';
 
 const serverStore = useServerStore();
+const vibratorStore = useVibratorStore();
 const showServerModal = ref(false);
+const showRemotePairingModal = ref(false);
+const selectedServer = ref<{ name: string; url: string } | null>(null);
 
-const showCustomModal = () => {
+const showCustomModal = () =>
+{
     showServerModal.value = true;
 };
 
-const handleModalDismiss = () => {
+const handleModalDismiss = () =>
+{
     showServerModal.value = false;
 };
 
-const addServer = (data: { name: string; url: string }) => {
+const handleRemotePairingDismiss = () =>
+{
+    showRemotePairingModal.value = false;
+};
+
+const handleServerClick = (server: { name: string; url: string }) =>
+{
+    selectedServer.value = server;
+    showRemotePairingModal.value = true;
+};
+
+const handleRemoteConnect = async (serverUrl: string, deviceId: string) =>
+{
+    try {
+        if (selectedServer.value) {
+            await vibratorStore.connectRemote(selectedServer.value.url, deviceId);
+            showRemotePairingModal.value = false;
+        }
+    } catch (error) {
+        console.error('Failed to connect to remote:', error);
+    }
+};
+
+const addServer = (data: { name: string; url: string }) =>
+{
     serverStore.addServer(data);
     showServerModal.value = false;
 };
 
-onMounted(() => {
+onMounted(() =>
+{
     serverStore.loadServers();
 });
 </script>
@@ -40,7 +72,9 @@ onMounted(() => {
                     <p class="text-lg text-gray-400">Let's connect to a remote server</p>
                 </div>
                 <div class="h-[55vh] overflow-y-auto">
-                    <div v-for="(server, index) in serverStore.servers" :key="server.url" class="server-container flex flex-col p-3 bg-zinc-800 cursor-pointer">
+                    <div v-for="(server, index) in serverStore.servers" :key="server.url"
+                        class="server-container flex flex-col p-3 bg-zinc-800 cursor-pointer"
+                        @click="handleServerClick(server)">
                         <div class="server-item flex justify-between items-center p-2">
                             <div class="w-full flex justify-between items-center">
                                 <div class="flex gap-4">
@@ -54,20 +88,20 @@ onMounted(() => {
                                         </div>
                                     </div>
                                 </div>
-                                <button @click.stop="serverStore.deleteServer(index)" class="text-red-500 hover:text-red-400 p-2">
+                                <button @click.stop="serverStore.deleteServer(index)"
+                                    class="text-red-500 hover:text-red-400 p-2">
                                     <LucideTrash2 class="text-xl" />
                                 </button>
                             </div>
                         </div>
                     </div>
                 </div>
-                <p @click="showCustomModal" class="text-center underline cursor-pointer mt-4 text-lg">I am self hosting</p>
+                <p @click="showCustomModal" class="text-center underline cursor-pointer mt-4 text-lg">I am self hosting
+                </p>
 
-                <ServerModal 
-                    :is-open="showServerModal" 
-                    @dismiss="handleModalDismiss" 
-                    @add="addServer" 
-                />
+                <ServerModal :is-open="showServerModal" @dismiss="handleModalDismiss" @add="addServer" />
+
+                <RemotePairingModal :is-open="showRemotePairingModal" @dismiss="handleRemotePairingDismiss" @connect="handleRemoteConnect" />
             </div>
         </ion-content>
     </ion-page>

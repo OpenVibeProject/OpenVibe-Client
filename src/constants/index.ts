@@ -13,5 +13,5 @@ export const MAX_LOG_ENTRIES = 100;
 // Default server
 export const DEFAULT_SERVER = {
   name: 'OpenVibe',
-  url: 'openvibe-server.duckdns.org:6969'
+  url: 'ws://openvibe-server.duckdns.org:6969'
 };

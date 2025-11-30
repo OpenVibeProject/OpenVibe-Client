@@ -15,6 +15,8 @@ export const useVibratorStore = defineStore('vibrator', () => {
   const connectionType = ref<TransportType | null>(null);
   const wsConnectionAttempted = ref(false);
   const pendingTransport = ref<TransportType | null>(null);
+  const pendingServerAddress = ref<string | null>(null);
+  const pendingDeviceId = ref<string | null>(null);
   let transportSwitchResolve: ((status: StatusResponse) => void) | null = null;
 
   const bleStore = useBleStore();
@@ -86,9 +88,17 @@ export const useVibratorStore = defineStore('vibrator', () => {
       pendingTransport.value = null;
       
       // Connect to WebSocket if switching to WIFI or REMOTE
-      if ((targetTransport === TransportType.WIFI || targetTransport === TransportType.REMOTE) && newStatus.ipAddress) {
-        debugStore.addLog(LogLevel.INFO, `Connecting to WebSocket at ${newStatus.ipAddress}`);
-        wsStore.connect(newStatus.ipAddress);
+      if ((targetTransport === TransportType.WIFI || targetTransport === TransportType.REMOTE)) {
+        let connectAddress: string;
+        if (targetTransport === TransportType.REMOTE && (newStatus as any).serverAddress && newStatus.deviceId) {
+          connectAddress = `${(newStatus as any).serverAddress}/pair?id=${newStatus.deviceId}`;
+        } else {
+          connectAddress = newStatus.ipAddress!;
+        }
+        debugStore.addLog(LogLevel.INFO, `Connecting to WebSocket at ${connectAddress}`);
+        wsStore.connect(connectAddress);
+        pendingServerAddress.value = null;
+        pendingDeviceId.value = null;
       }
       
       if (transportSwitchResolve) {
@@ -146,14 +156,20 @@ export const useVibratorStore = defineStore('vibrator', () => {
     }
   };
 
-  const switchTransport = async (newTransport: TransportType): Promise<StatusResponse> => {
+  const switchTransport = async (newTransport: TransportType, serverAddress?: string, deviceId?: string): Promise<StatusResponse> => {
     debugStore.addLog(LogLevel.INFO, `switchTransport: ${connectionType.value} -> ${newTransport}, connected=${isConnected.value}`);
     if (!isConnected.value) throw new Error('Not connected');
 
     return new Promise((resolve, reject) => {
-      const switchRequest = { requestType: RequestEnum.SWITCH_TRANSPORT, transport: newTransport };
+      const switchRequest = { 
+        requestType: RequestEnum.SWITCH_TRANSPORT, 
+        transport: newTransport,
+        ...(serverAddress && { serverAddress })
+      };
       const payload = JSON.stringify(switchRequest);
       pendingTransport.value = newTransport;
+      if (serverAddress) pendingServerAddress.value = serverAddress;
+      if (deviceId) pendingDeviceId.value = deviceId;
       transportSwitchResolve = resolve;
       debugStore.addLog(LogLevel.DEBUG, `Sending on ${connectionType.value}: ${payload}`);
 
@@ -173,7 +189,21 @@ export const useVibratorStore = defineStore('vibrator', () => {
     });
   };
 
+  const connectRemote = async (serverUrl: string, deviceId: string) => {
+    try {
+      debugStore.addLog(LogLevel.INFO, `Connecting to remote server: ${serverUrl} with device ID: ${deviceId}`);
+      await switchTransport(TransportType.REMOTE, serverUrl, deviceId);
+    } catch (error) {
+      debugStore.addLog(LogLevel.ERROR, `Failed to connect to remote: ${error}`);
+      throw error;
+    }
+  };
+
   initListeners();
+
+  const setCurrentTransport = (transport: TransportType) => {
+    connectionType.value = transport;
+  };
 
   return {
     status,
@@ -185,6 +215,8 @@ export const useVibratorStore = defineStore('vibrator', () => {
     requestStatus,
     setIntensity,
     switchTransport,
+    connectRemote,
+    setCurrentTransport,
     cleanupListeners
   };
 });
