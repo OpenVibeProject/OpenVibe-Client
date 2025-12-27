@@ -71,7 +71,7 @@ const scanForDevices = async () =>
         devices.value = [];
         targetFound.value = false;
 
-        await BleClient.initialize();
+        await BleClient.initialize({ androidNeverForLocation: true });
 
         debugStore.addLog(LogLevel.DEBUG, 'Starting BLE scan');
 
@@ -143,7 +143,7 @@ const checkBluetoothAvailability = async () =>
 {
     try
     {
-        await BleClient.initialize();
+        await BleClient.initialize({ androidNeverForLocation: true });
         const isEnabled = await BleClient.isEnabled();
         isBluetoothAvailable.value = isEnabled;
         return isEnabled;

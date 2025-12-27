@@ -29,6 +29,9 @@ export const useVibratorStore = defineStore('vibrator', () => {
   let wsConnectedUnsub: (() => void) | null = null;
   let wsMessageUnsub: (() => void) | null = null;
   let wsDisconnectedUnsub: (() => void) | null = null;
+  const localRemoteConnect = ref(false);
+  let remoteConnectResolve: ((status: StatusResponse) => void) | null = null;
+  let remoteConnectTimeout: number | null = null;
 
   const initListeners = () => {
     bleConnectedUnsub = bleStore.on('notifying', () => {
@@ -41,7 +44,16 @@ export const useVibratorStore = defineStore('vibrator', () => {
     
     bleNotificationUnsub = bleStore.on('notification', (payload: any) => {
       if (payload.parsed && connectionType.value === TransportType.BLE) {
-        updateStatus(payload.parsed);
+        // Some notifications may be partial (e.g. only intensity). If so,
+        // merge into the existing status to keep UI state consistent.
+        if (payload.parsed.requestType === RequestEnum.INTENSITY) {
+          status.value = {
+            ...(status.value || {}),
+            intensity: payload.parsed.intensity
+          } as StatusResponse;
+        } else {
+          updateStatus(payload.parsed);
+        }
       }
     });
     
@@ -52,13 +64,40 @@ export const useVibratorStore = defineStore('vibrator', () => {
     });
     
     wsConnectedUnsub = wsStore.on('connected', () => {
-      setConnection(TransportType.WIFI);
+      if (localRemoteConnect.value) {
+        // manual remote connect (user-entered device id) should be treated
+        // as talking to a remote device over the socket server, not as
+        // switching this device's transport.
+        setConnection(TransportType.REMOTE);
+        localRemoteConnect.value = false;
+      } else {
+        setConnection(TransportType.WIFI);
+      }
       requestStatus();
     });
     
     wsMessageUnsub = wsStore.on('message', (payload: any) => {
       if (payload.parsed && (connectionType.value === TransportType.WIFI || connectionType.value === TransportType.REMOTE)) {
-        updateStatus(payload.parsed);
+        // Handle partial messages (e.g. INTENSITY) by merging into existing status
+        if (payload.parsed.requestType === RequestEnum.INTENSITY) {
+          status.value = {
+            ...(status.value || {}),
+            intensity: payload.parsed.intensity
+          } as StatusResponse;
+        } else {
+          updateStatus(payload.parsed);
+        }
+
+        // If we initiated a manual remote connect, resolve the promise
+        // when we get the first STATUS response for that remote device.
+        if (remoteConnectResolve && connectionType.value === TransportType.REMOTE && status.value) {
+          if (remoteConnectTimeout) {
+            clearTimeout(remoteConnectTimeout);
+            remoteConnectTimeout = null;
+          }
+          remoteConnectResolve(status.value);
+          remoteConnectResolve = null;
+        }
       }
     });
     
@@ -158,7 +197,48 @@ export const useVibratorStore = defineStore('vibrator', () => {
 
   const switchTransport = async (newTransport: TransportType, serverAddress?: string, deviceId?: string): Promise<StatusResponse> => {
     debugStore.addLog(LogLevel.INFO, `switchTransport: ${connectionType.value} -> ${newTransport}, connected=${isConnected.value}`);
-    if (!isConnected.value) throw new Error('Not connected');
+    if (!isConnected.value) {
+      // If user requested a remote transport but we are not currently
+      // connected to a device, allow a direct remote connect instead of
+      // failing with "Not connected". This covers UI flows that attempt
+      // to switch to a remote server by providing an address/device id.
+      if (newTransport === TransportType.REMOTE && serverAddress) {
+        debugStore.addLog(LogLevel.INFO, 'Not connected locally — performing direct remote connect');
+
+        return new Promise((resolve, reject) => {
+          const base = serverAddress.replace(/\/$/, '');
+          const connectAddress = `${base}/pair?id=${encodeURIComponent(deviceId || '')}`;
+
+          localRemoteConnect.value = true;
+          remoteConnectResolve = resolve;
+
+          // safety timeout
+          remoteConnectTimeout = window.setTimeout(() => {
+            remoteConnectTimeout = null;
+            localRemoteConnect.value = false;
+            if (remoteConnectResolve) {
+              remoteConnectResolve = null;
+            }
+            reject(new Error('Remote connect timed out'));
+          }, 8000);
+
+          try {
+            wsStore.connect(connectAddress);
+          } catch (error) {
+            if (remoteConnectTimeout) {
+              clearTimeout(remoteConnectTimeout);
+              remoteConnectTimeout = null;
+            }
+            remoteConnectResolve = null;
+            localRemoteConnect.value = false;
+            debugStore.addLog(LogLevel.ERROR, `Failed to connect to remote websocket: ${error}`);
+            reject(error);
+          }
+        });
+      }
+
+      throw new Error('Not connected');
+    }
 
     return new Promise((resolve, reject) => {
       const switchRequest = { 
@@ -189,14 +269,39 @@ export const useVibratorStore = defineStore('vibrator', () => {
     });
   };
 
-  const connectRemote = async (serverUrl: string, deviceId: string) => {
-    try {
-      debugStore.addLog(LogLevel.INFO, `Connecting to remote server: ${serverUrl} with device ID: ${deviceId}`);
-      await switchTransport(TransportType.REMOTE, serverUrl, deviceId);
-    } catch (error) {
-      debugStore.addLog(LogLevel.ERROR, `Failed to connect to remote: ${error}`);
-      throw error;
-    }
+  const connectRemote = async (serverUrl: string, deviceId: string): Promise<StatusResponse> => {
+    debugStore.addLog(LogLevel.INFO, `Connecting to remote server: ${serverUrl} with device ID: ${deviceId}`);
+
+    return new Promise((resolve, reject) => {
+      const base = serverUrl.replace(/\/$/, '');
+      const connectAddress = `${base}/pair?id=${encodeURIComponent(deviceId)}`;
+
+      localRemoteConnect.value = true;
+      remoteConnectResolve = resolve;
+
+      // safety timeout
+      remoteConnectTimeout = window.setTimeout(() => {
+        remoteConnectTimeout = null;
+        localRemoteConnect.value = false;
+        if (remoteConnectResolve) {
+          remoteConnectResolve = null;
+        }
+        reject(new Error('Remote connect timed out'));
+      }, 8000);
+
+      try {
+        wsStore.connect(connectAddress);
+      } catch (error) {
+        if (remoteConnectTimeout) {
+          clearTimeout(remoteConnectTimeout);
+          remoteConnectTimeout = null;
+        }
+        remoteConnectResolve = null;
+        localRemoteConnect.value = false;
+        debugStore.addLog(LogLevel.ERROR, `Failed to connect to remote websocket: ${error}`);
+        reject(error);
+      }
+    });
   };
 
   initListeners();

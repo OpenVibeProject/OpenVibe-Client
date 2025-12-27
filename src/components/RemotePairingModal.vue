@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+import { useRouter } from 'vue-router';
 import { IonModal } from '@ionic/vue';
 
 interface Props
@@ -14,6 +15,7 @@ interface Emits
 }
 
 const emit = defineEmits<Emits>();
+const router = useRouter();
 
 const handleDismiss = () =>
 {
@@ -27,6 +29,7 @@ const handleConnect = () =>
   {
     emit('connect', '', deviceId.value);
     deviceId.value = '';
+    router.push('/');
   }
 };
 

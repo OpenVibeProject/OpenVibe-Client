@@ -85,7 +85,7 @@ export const useBleStore = defineStore('ble', () =>
     debugStore.addLog(LogLevel.DEBUG, `connectToDevice start: ${id}`);
     try
     {
-      await BleClient.initialize();
+      await BleClient.initialize({ androidNeverForLocation: true });
       debugStore.addLog(LogLevel.DEBUG, 'BleClient.initialize() returned');
       await BleClient.connect(id, () =>
       {

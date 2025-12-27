@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { IonPage, IonContent } from '@ionic/vue';
 import LiquidGauge from '../components/LiquidGauge.vue';
 import { Roller } from 'vue-roller';
@@ -9,9 +9,43 @@ import { useVibratorStore } from '@/stores/vibrator';
 const vibratorStore = useVibratorStore();
 
 const sliderValue = ref(0);
+const _animToken = ref(0);
 const battery = computed(() => vibratorStore.status?.battery || 0);
 const intensity = computed(() => vibratorStore.status?.intensity || 0);
 const isOnline = computed(() => vibratorStore.isConnected);
+
+watch(
+    () => vibratorStore.status?.intensity,
+    async (newVal) =>
+    {
+        if (newVal === undefined) return;
+
+        _animToken.value += 1;
+        const token = _animToken.value;
+
+        const start = Math.round(sliderValue.value);
+        const target = Math.round(newVal);
+        if (start === target) {
+            sliderValue.value = target;
+            return;
+        }
+
+        const step = target > start ? 1 : -1;
+        const diff = Math.abs(target - start);
+
+        const totalDuration = Math.min(300, 12 * diff + 60);
+        const delay = Math.max(6, Math.round(totalDuration / diff));
+        for (let i = start; i !== target; i += step)
+        {
+            if (token !== _animToken.value) return;
+            sliderValue.value = i + step;
+            await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+
+        if (token === _animToken.value) sliderValue.value = target;
+    },
+    { immediate: true }
+);
 
 const onSliderRelease = () =>
 {
