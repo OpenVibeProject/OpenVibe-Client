@@ -1,70 +1,43 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
-import { ThemeEnum } from '@/types/ThemeEnum';
 
-export const useAppStore = defineStore('app', () => {
-  const isFirstSetup = ref(true);
-  const theme = ref<ThemeEnum>(ThemeEnum.DARK);
-  const language = ref('en');
-  const lastConnectedDeviceId = ref<string | null>(null);
-
-  function completeFirstSetup() {
-    isFirstSetup.value = false;
-    saveSettings();
-  }
-
-  function setTheme(newTheme: ThemeEnum) {
-    theme.value = newTheme;
-    saveSettings();
-  }
-
-  function setLanguage(lang: string) {
-    language.value = lang;
-    saveSettings();
-  }
-
-  function setLastConnectedDevice(deviceId: string | null) {
-    lastConnectedDeviceId.value = deviceId;
-    saveSettings();
-  }
-
-  function saveSettings() {
-    const settings = {
-      isFirstSetup: isFirstSetup.value,
-      theme: theme.value,
-      language: language.value,
-      lastConnectedDeviceId: lastConnectedDeviceId.value
-    };
-    localStorage.setItem('openvibe-settings', JSON.stringify(settings));
-  }
-
-  function loadSettings() {
-    try {
-      const saved = localStorage.getItem('openvibe-settings');
-      if (saved) {
-        const settings = JSON.parse(saved);
-        isFirstSetup.value = settings.isFirstSetup ?? true;
-        theme.value = settings.theme ?? ThemeEnum.DARK;
-        language.value = settings.language ?? 'en';
-        lastConnectedDeviceId.value = settings.lastConnectedDeviceId ?? null;
+export const useAppStore = defineStore('app', {
+  state: () => ({
+    isFirstSetup: true as boolean,
+    lastConnectedDeviceId: null as string | null
+  }),
+  getters: {
+    hasLastConnectedDevice(state) {
+      return !!state.lastConnectedDeviceId;
+    }
+  },
+  actions: {
+    setLastConnectedDevice(deviceId: string | null) {
+      this.lastConnectedDeviceId = deviceId;
+      this.isFirstSetup = false;
+      this.saveSettings();
+    },
+    saveSettings() {
+      const settings = {
+        isFirstSetup: this.isFirstSetup,
+        lastConnectedDeviceId: this.lastConnectedDeviceId
+      };
+      try {
+        localStorage.setItem('openvibe-settings', JSON.stringify(settings));
+      } catch (e) {
+        console.warn('Failed to save settings:', e);
       }
-    } catch (e) {
-      console.warn('Failed to load settings:', e);
+    },
+    loadSettings() {
+      try {
+        const saved = localStorage.getItem('openvibe-settings');
+        if (saved) {
+          const settings = JSON.parse(saved);
+          this.isFirstSetup = settings.isFirstSetup ?? true;
+          this.lastConnectedDeviceId = settings.lastConnectedDeviceId ?? null;
+        }
+      } catch (e) {
+        console.warn('Failed to load settings:', e);
+      }
     }
   }
-
-  loadSettings();
-
-  return {
-    isFirstSetup,
-    theme,
-    language,
-    lastConnectedDeviceId,
-    completeFirstSetup,
-    setTheme,
-    setLanguage,
-    setLastConnectedDevice,
-    saveSettings,
-    loadSettings
-  };
 });

@@ -1,0 +1,5 @@
+export enum BLEEmitterEnum {
+    CONNECTED = 'CONNECTED',
+    DISCONNECTED = 'DISCONNECTED',
+    NOTIFICATION = 'NOTIFICATION'
+}

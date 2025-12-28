@@ -13,6 +13,7 @@ import { WiFiNetwork } from '@/types/WiFiNetwork';
 import { WiFiCredentialsRequest } from '@/types/WiFiCredentialsRequest';
 import { WiFiCredentials } from '@/types/WiFiCredentials';
 import { RequestEnum } from '@/types/RequestEnum';
+import { BLEEmitterEnum } from '@/types/BLEEmitterEnum';
 
 const bleStore = useBleStore();
 const debugStore = useDebugStore();
@@ -63,7 +64,7 @@ const connectToNetwork = async (data: WiFiCredentials) =>
         ssid: data.ssid,
         password: data.password
       }
-      await bleStore.writeCharacteristic(JSON.stringify(connectionRequest));
+      await bleStore.send(JSON.stringify(connectionRequest));
       alert('WiFi credentials sent to device!');
     } else
     {
@@ -102,7 +103,7 @@ const onNotification = async (payload: any) =>
 onMounted(async () =>
 {
   await scanNetworks();
-  unsub = bleStore.on('notification', onNotification);
+  unsub = bleStore.emitter.on(BLEEmitterEnum.NOTIFICATION, onNotification);
   scanInterval = setInterval(scanNetworks, 10000);
 });
 

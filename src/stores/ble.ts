@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { Ref, ref } from 'vue';
 import type { ScanResult } from '@capacitor-community/bluetooth-le';
 import { BleClient } from '@capacitor-community/bluetooth-le';
 import { BLEEnum } from '@/types/BLEEnum';
@@ -7,227 +7,97 @@ import { useDebugStore } from '@/stores/debug';
 import { useAppStore } from '@/stores/app';
 import { LogLevel } from '@/types/LogLevel';
 import { Emitter } from '@/utils/Emitter';
-import { BLE_MAX_RECONNECT_ATTEMPTS, BLE_MAX_RECONNECT_DELAY } from '@/constants';
+import { TARGET_DEVICE_NAME_PREFIX } from '@/constants';
+import { BLEEmitterEnum } from '@/types/BLEEmitterEnum';
 
-export const useBleStore = defineStore('ble', () =>
-{
-  const deviceId = ref<string | null>(null);
-  const device = ref<ScanResult | null>(null);
-  const isConnected = ref(false);
-  const emitter = new Emitter();
-
-  const debugStore = useDebugStore();
-  const appStore = useAppStore();
-
-  let notificationUnsub: (() => Promise<void>) | null = null;
-  let reconnectTimer: number | null = null;
-  let reconnectAttempts = 0;
-
-  function setConnection(id: string, scanResult: ScanResult | null = null)
-  {
-    deviceId.value = id;
-    if (scanResult) device.value = scanResult;
-    isConnected.value = true;
-    appStore.setLastConnectedDevice(id);
-    stopReconnection(); // Stop any ongoing reconnection attempts
-    debugStore.addLog(LogLevel.INFO, `BLE connected: ${id}`);
-    emitter.emit('connected', { deviceId: id, scanResult });
-  }
-
-  function clearConnection()
-  {
-    const prev = deviceId.value;
-    deviceId.value = null;
-    device.value = null;
-    isConnected.value = false;
-    debugStore.addLog(LogLevel.INFO, `BLE disconnected: ${prev ?? 'unknown'}`);
-    emitter.emit('disconnected');
-
-    if (appStore.lastConnectedDeviceId && reconnectAttempts < BLE_MAX_RECONNECT_ATTEMPTS)
+export const useBleStore = defineStore('ble', {
+  state: () => ({
+    device: ref(null) as Ref<ScanResult | null>,
+    emitter: new Emitter()
+  }),
+  getters: {
+    deviceId(): string | null { return (this.device as ScanResult | null)?.device?.deviceId ?? null },
+    isBluetoothAvailable(): Promise<boolean> { return BleClient.isEnabled() },
+  },
+  actions: {
+    async scan()
     {
-      startReconnection();
-    }
-  }
+      const debugStore = useDebugStore()
+      const appStore = useAppStore()
 
-  function startReconnection()
-  {
-    if (reconnectTimer) clearTimeout(reconnectTimer);
-
-    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), BLE_MAX_RECONNECT_DELAY);
-    debugStore.addLog(LogLevel.INFO, `Attempting reconnection in ${delay}ms (attempt ${reconnectAttempts + 1}/${BLE_MAX_RECONNECT_ATTEMPTS})`);
-
-    reconnectTimer = setTimeout(async () =>
-    {
-      reconnectAttempts++;
-      if (appStore.lastConnectedDeviceId)
-      {
-        await connectToDevice(appStore.lastConnectedDeviceId);
-        if (isConnected.value)
-        {
-          reconnectAttempts = 0;
+      if (appStore.lastConnectedDeviceId) {
+        const connected = await this.connect({ device: { deviceId: appStore.lastConnectedDeviceId } } as ScanResult);
+        if (connected) {
+          return;
         }
       }
-    }, delay);
-  }
 
-  function stopReconnection()
-  {
-    if (reconnectTimer)
-    {
-      clearTimeout(reconnectTimer);
-      reconnectTimer = null;
-    }
-    reconnectAttempts = 0;
-  }
-
-  async function connectToDevice(id: string, scanResult?: ScanResult)
-  {
-    debugStore.addLog(LogLevel.DEBUG, `connectToDevice start: ${id}`);
-    try
-    {
-      await BleClient.initialize({ androidNeverForLocation: true });
-      debugStore.addLog(LogLevel.DEBUG, 'BleClient.initialize() returned');
-      await BleClient.connect(id, () =>
+      BleClient.requestLEScan({}, async (result) =>
       {
-        debugStore.addLog(LogLevel.WARN, `BleClient reported disconnect for ${id}`);
-        clearConnection();
-      });
-      debugStore.addLog(LogLevel.INFO, `BleClient.connect succeeded: ${id}`);
-      setConnection(id, scanResult ?? null);
-      await startNotifications();
-      debugStore.addLog(LogLevel.DEBUG, `connectToDevice complete: ${id}`);
+        const name = (result.localName ?? result.device?.name ?? result.device.deviceId).toString()
+        debugStore.addLog(LogLevel.DEBUG, `Bluetooth: found device ${name} (${result.device.deviceId}) rssi=${result.rssi}`)
+        if (name.startsWith(TARGET_DEVICE_NAME_PREFIX)) {
+          await BleClient.stopLEScan()
+          await this.connect(result)
+        }
+        }
+      );
+    },
+    async connect(scanResult: ScanResult)
+    {
+      const debugStore = useDebugStore()
+      const appStore = useAppStore()
 
-      return true;
-    } catch (e)
-    {
-      debugStore.addLog(LogLevel.ERROR, `connectToDevice failed: ${String(e)}`);
-      emitter.emit('error', { op: 'connect', error: e });
-      return false;
-    }
-  }
-
-  async function disconnect()
-  {
-    debugStore.addLog(LogLevel.DEBUG, 'disconnect called');
-    stopReconnection();
-    try
-    {
-      if (notificationUnsub)
-      {
-        debugStore.addLog(LogLevel.DEBUG, 'calling notificationUnsub()');
-        await notificationUnsub();
-        notificationUnsub = null;
-      }
-      if (deviceId.value)
-      {
-        debugStore.addLog(LogLevel.DEBUG, `BleClient.disconnect(${deviceId.value})`);
-        await BleClient.disconnect(deviceId.value);
-        debugStore.addLog(LogLevel.INFO, `BleClient.disconnect succeeded: ${deviceId.value}`);
-      }
-    } catch (e)
-    {
-      debugStore.addLog(LogLevel.WARN, `disconnect error: ${String(e)}`);
-    } finally
-    {
-      const prev = deviceId.value;
-      deviceId.value = null;
-      device.value = null;
-      isConnected.value = false;
-      debugStore.addLog(LogLevel.INFO, `BLE disconnected: ${prev ?? 'unknown'}`);
-      emitter.emit('disconnected');
-    }
-  }
-
-  async function startNotifications()
-  {
-    if (!deviceId.value)
-    {
-      debugStore.addLog(LogLevel.ERROR, 'startNotifications called with no deviceId');
-      emitter.emit('error', { op: 'startNotifications', error: 'no-device' });
-      return;
-    }
-    await BleClient.startNotifications(
-      deviceId.value,
-      BLEEnum.SERVICE_UUID,
-      BLEEnum.NOTIFY_CHARACTERISTIC_UUID,
-      (v) => handleNotification(v)
-    );
-    notificationUnsub = async () =>
-    {
+      const deviceId = scanResult?.device.deviceId ?? this.deviceId;
+      debugStore.addLog(LogLevel.DEBUG, `BLE Connecting to: ${deviceId}`);
       try
       {
-        await BleClient.stopNotifications(deviceId.value!, BLEEnum.SERVICE_UUID, BLEEnum.NOTIFY_CHARACTERISTIC_UUID);
-        debugStore.addLog(LogLevel.DEBUG, `BLE stopNotifications succeeded for ${deviceId.value}`);
+        await BleClient.connect(deviceId, async () =>
+        {
+          await BleClient.stopNotifications(deviceId, BLEEnum.SERVICE_UUID, BLEEnum.NOTIFY_CHARACTERISTIC_UUID);
+
+          this.device = null;
+          this.emitter.emit(BLEEmitterEnum.DISCONNECTED);
+          debugStore.addLog(LogLevel.WARN, `BLE Disconnected from: ${deviceId}`);
+        })
+
+        debugStore.addLog(LogLevel.INFO, `BLE Connected to: ${deviceId}`);
+        this.device = scanResult
+        this.emitter.emit(BLEEmitterEnum.CONNECTED, deviceId);
+        appStore.setLastConnectedDevice(deviceId);
+
+        await BleClient.startNotifications(deviceId, BLEEnum.SERVICE_UUID, BLEEnum.NOTIFY_CHARACTERISTIC_UUID,
+          (value: DataView) =>
+          {
+            const notificationData = JSON.parse(new TextDecoder().decode(new Uint8Array(value.buffer)))
+            this.emitter.emit(BLEEmitterEnum.NOTIFICATION, notificationData)
+            debugStore.addLog(LogLevel.DEBUG, `BLE Notification: ${JSON.stringify(notificationData)}`)
+          })
+        return true;
       } catch (e)
       {
-        debugStore.addLog(LogLevel.WARN, `BLE stopNotifications error: ${String(e)}`);
+        debugStore.addLog(LogLevel.ERROR, `BLE Connection error to ${deviceId}: ${String(e)}`);
+        return false;
       }
-    };
-    debugStore.addLog(LogLevel.INFO, `Subscribed to notifications on ${deviceId.value}`);
-    emitter.emit('notifying', { deviceId: deviceId.value });
-  }
-
-  function parseNotificationValue(value: any)
-  {
-    try
+    },
+    async send(payload: string | Uint8Array)
     {
-      const data = value && (value.value ?? value);
-      let buffer: ArrayBuffer | null = null;
-      if (!data) return { raw: null };
-      if (data instanceof DataView) buffer = (data as DataView).buffer as ArrayBuffer;
-      else if (data instanceof ArrayBuffer) buffer = data as ArrayBuffer;
-      else if ((data as any).buffer) buffer = (data as any).buffer as ArrayBuffer;
-      if (!buffer) return { raw: null };
-      const decoder = new TextDecoder();
-      const raw = decoder.decode(buffer);
-      const parsed = JSON.parse(raw);
-      return { raw, parsed };
-    } catch (e)
-    {
-      debugStore.addLog(LogLevel.WARN, `BLE parseNotificationValue error: ${String(e)}`);
-      return { raw: null };
+      const debugStore = useDebugStore();
+      if (!this.deviceId)
+      {
+        debugStore.addLog(LogLevel.ERROR, 'BLE send called with no deviceId');
+      }
+      const buf = typeof payload === 'string' ? new TextEncoder().encode(payload) : payload;
+      try
+      {
+        debugStore.addLog(LogLevel.DEBUG, `BLE send to ${this.deviceId}: ${typeof payload === 'string' ? payload : '[binary]'}`);
+        await BleClient.write(this.deviceId as string, BLEEnum.SERVICE_UUID, BLEEnum.CHARACTERISTIC_UUID, new DataView((buf as Uint8Array).buffer));
+        debugStore.addLog(LogLevel.INFO, `BLE send succeeded to ${this.deviceId}`);
+      } catch (e)
+      {
+        debugStore.addLog(LogLevel.ERROR, `BLE send error: ${String(e)}`);
+        throw e;
+      }
     }
   }
-
-  function handleNotification(value: any)
-  {
-    const out = parseNotificationValue(value);
-    debugStore.addLog(LogLevel.DEBUG, `handleNotification parsed: ${JSON.stringify(out)}`);
-    emitter.emit('notification', out);
-  }
-
-  async function send(payload: string | Uint8Array)
-  {
-    if (!deviceId.value)
-    {
-      debugStore.addLog(LogLevel.ERROR, 'BLE send called with no deviceId');
-      throw new Error('no-device');
-    }
-    const buf = typeof payload === 'string' ? new TextEncoder().encode(payload) : payload;
-    try
-    {
-      debugStore.addLog(LogLevel.DEBUG, `BLE send to ${deviceId.value}: ${typeof payload === 'string' ? payload : '[binary]'}`);
-      await BleClient.write(deviceId.value, BLEEnum.SERVICE_UUID, BLEEnum.CHARACTERISTIC_UUID, new DataView((buf as Uint8Array).buffer));
-      debugStore.addLog(LogLevel.INFO, `BLE send succeeded to ${deviceId.value}`);
-    } catch (e)
-    {
-      debugStore.addLog(LogLevel.ERROR, `BLE send error: ${String(e)}`);
-      throw e;
-    }
-  }
-
-  return {
-    deviceId,
-    device,
-    isConnected,
-    setConnection,
-    clearConnection,
-    connectToDevice,
-    disconnect,
-    startNotifications,
-    writeCharacteristic: send,
-    on: emitter.on.bind(emitter),
-    off: emitter.off.bind(emitter),
-    emit: emitter.emit.bind(emitter)
-  };
-});
+})

@@ -7,8 +7,7 @@ export const STATUS_REQUEST_INTERVAL = 30000; // 30 seconds
 export const BLE_MAX_RECONNECT_ATTEMPTS = 5;
 export const BLE_MAX_RECONNECT_DELAY = 30000; // 30 seconds
 
-// Debug console constants
-export const MAX_LOG_ENTRIES = 100;
+export const TARGET_DEVICE_NAME_PREFIX = 'OpenVibe';
 
 // Default server
 export const DEFAULT_SERVER = {

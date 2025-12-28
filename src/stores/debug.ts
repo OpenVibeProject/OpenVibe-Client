@@ -1,7 +1,6 @@
 import { LogEntry } from '@/types/LogEntry';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { MAX_LOG_ENTRIES } from '@/constants';
 
 export const useDebugStore = defineStore('debug', () => {
   const logs = ref<LogEntry[]>([]);
@@ -15,10 +14,6 @@ export const useDebugStore = defineStore('debug', () => {
       level,
       message
     });
-    
-    if (logs.value.length > MAX_LOG_ENTRIES) {
-      logs.value.shift();
-    }
   };
 
   const clearLogs = () => {

@@ -7,15 +7,20 @@ import router from './router';
 import { useAppStore } from './stores/app';
 import { useBleStore } from './stores/ble';
 import { onMounted } from 'vue';
+import { BleClient } from '@capacitor-community/bluetooth-le';
 
 const appStore = useAppStore();
 const bleStore = useBleStore();
 
+appStore.loadSettings();
+
 onMounted(async () => {
+  await BleClient.initialize({ androidNeverForLocation: true });
+
   if (appStore.isFirstSetup) {
     router.push("/bluetooth-setup");
   } else if (appStore.lastConnectedDeviceId) {
-    await bleStore.connectToDevice(appStore.lastConnectedDeviceId);
+    await bleStore.scan();
   }
 });
 </script>

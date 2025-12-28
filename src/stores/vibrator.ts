@@ -8,6 +8,7 @@ import { RequestEnum } from '@/types/RequestEnum';
 import { TransportType } from '@/types/TransportEnum';
 import { LogLevel } from '@/types/LogLevel';
 import { STATUS_REQUEST_INTERVAL } from '@/constants';
+import { BLEEmitterEnum } from '@/types/BLEEmitterEnum';
 
 export const useVibratorStore = defineStore('vibrator', () => {
   const status = ref<StatusResponse | null>(null);
@@ -24,8 +25,6 @@ export const useVibratorStore = defineStore('vibrator', () => {
   const debugStore = useDebugStore();
 
   let bleConnectedUnsub: (() => void) | null = null;
-  let bleNotificationUnsub: (() => void) | null = null;
-  let bleDisconnectedUnsub: (() => void) | null = null;
   let wsConnectedUnsub: (() => void) | null = null;
   let wsMessageUnsub: (() => void) | null = null;
   let wsDisconnectedUnsub: (() => void) | null = null;
@@ -34,7 +33,7 @@ export const useVibratorStore = defineStore('vibrator', () => {
   let remoteConnectTimeout: number | null = null;
 
   const initListeners = () => {
-    bleConnectedUnsub = bleStore.on('notifying', () => {
+    bleConnectedUnsub = bleStore.emitter.on(BLEEmitterEnum.CONNECTED, () => {
       setConnection(TransportType.BLE);
       setInterval(() => {
         requestStatus();
@@ -42,26 +41,7 @@ export const useVibratorStore = defineStore('vibrator', () => {
       requestStatus();
     });
     
-    bleNotificationUnsub = bleStore.on('notification', (payload: any) => {
-      if (payload.parsed && connectionType.value === TransportType.BLE) {
-        // Some notifications may be partial (e.g. only intensity). If so,
-        // merge into the existing status to keep UI state consistent.
-        if (payload.parsed.requestType === RequestEnum.INTENSITY) {
-          status.value = {
-            ...(status.value || {}),
-            intensity: payload.parsed.intensity
-          } as StatusResponse;
-        } else {
-          updateStatus(payload.parsed);
-        }
-      }
-    });
     
-    bleDisconnectedUnsub = bleStore.on('disconnected', () => {
-      if (connectionType.value === TransportType.BLE) {
-        clearConnection();
-      }
-    });
     
     wsConnectedUnsub = wsStore.on('connected', () => {
       if (localRemoteConnect.value) {
@@ -110,8 +90,6 @@ export const useVibratorStore = defineStore('vibrator', () => {
 
   const cleanupListeners = () => {
     if (bleConnectedUnsub) bleConnectedUnsub();
-    if (bleNotificationUnsub) bleNotificationUnsub();
-    if (bleDisconnectedUnsub) bleDisconnectedUnsub();
     if (wsConnectedUnsub) wsConnectedUnsub();
     if (wsMessageUnsub) wsMessageUnsub();
     if (wsDisconnectedUnsub) wsDisconnectedUnsub();
@@ -121,7 +99,7 @@ export const useVibratorStore = defineStore('vibrator', () => {
     status.value = newStatus;
     
     if (pendingTransport.value) {
-      debugStore.addLog(LogLevel.INFO, `Switching transport: ${connectionType.value} -> ${pendingTransport.value}`);
+      debugStore.addLog(LogLevel.INFO, `Switching transport: $q{connectionType.value} -> ${pendingTransport.value}`);
       const targetTransport = pendingTransport.value;
       connectionType.value = targetTransport;
       pendingTransport.value = null;
@@ -167,7 +145,7 @@ export const useVibratorStore = defineStore('vibrator', () => {
 
     try {
       if (connectionType.value === TransportType.BLE) {
-        await bleStore.writeCharacteristic(JSON.stringify(statusRequest));
+        await bleStore.send(JSON.stringify(statusRequest));
       } else if (connectionType.value === TransportType.WIFI || connectionType.value === TransportType.REMOTE) {
         wsStore.send(statusRequest);
       }
@@ -183,7 +161,7 @@ export const useVibratorStore = defineStore('vibrator', () => {
 
     try {
       if (connectionType.value === TransportType.BLE) {
-        await bleStore.writeCharacteristic(JSON.stringify(intensityRequest));
+        await bleStore.send(JSON.stringify(intensityRequest));
       } else if (connectionType.value === TransportType.WIFI || connectionType.value === TransportType.REMOTE) {
         wsStore.send(intensityRequest);
       }
@@ -255,7 +233,7 @@ export const useVibratorStore = defineStore('vibrator', () => {
 
       try {
         if (connectionType.value === TransportType.BLE) {
-          bleStore.writeCharacteristic(payload);
+          bleStore.send(payload);
         } else if (connectionType.value === TransportType.WIFI || connectionType.value === TransportType.REMOTE) {
           wsStore.send(switchRequest);
         }
