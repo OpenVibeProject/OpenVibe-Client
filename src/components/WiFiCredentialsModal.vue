@@ -3,23 +3,18 @@ import { ref, computed } from 'vue';
 import { IonModal } from '@ionic/vue';
 import { WiFiProps } from '@/types/WiFiProps';
 import { WiFiEmits } from '@/types/WiFiEmits';
-import { RequestEnum } from '@/types/RequestEnum';
-import { WiFiCredentialsRequest } from '@/types/WiFiCredentialsRequest';
+import { useVibratorStore } from '@/stores/vibrator';
 
 const props = defineProps<WiFiProps>();
 const emit = defineEmits<WiFiEmits>();
+const vibratorStore = useVibratorStore();
 
 const password = ref('');
 const customSSID = ref('');
 
 const handleConnect = () => {
-  const ssid = props.isCustom ? customSSID.value : props.network?.SSID || '';
-  const connectionRequest: WiFiCredentialsRequest = {
-    requestType: RequestEnum.WIFI_CREDENTIALS,
-    ssid,
-    password: password.value
-  }
-  emit('connect', connectionRequest);
+  const ssid = props.isCustom ? customSSID.value : props.network?.SSID || ''
+  vibratorStore.setWiFiCredentials(ssid, password.value);
 };
 
 const handleDismiss = () => {

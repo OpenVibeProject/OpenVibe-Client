@@ -1,7 +1,7 @@
 import { BaseRequest } from "./BaseRequest";
-import { TransportType } from "./TransportEnum"
+import { TransportTypeEnum } from "./TransportTypeEnum"
 
 export interface SwitchTransportRequest extends BaseRequest {
-    transport: TransportType
+    transport: TransportTypeEnum
     serverAddress?: string
 }

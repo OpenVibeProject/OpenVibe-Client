@@ -1,16 +1,13 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, Ref } from 'vue';
-import { useRouter } from 'vue-router';
-import { useBleStore } from '@/stores/ble';
-import { useDebugStore } from '@/stores/debug';
+import { ref, onMounted } from 'vue';
 import { useServerStore } from '@/stores/server';
 import { useVibratorStore } from '@/stores/vibrator';
 import { IonPage, IonContent } from '@ionic/vue';
-import { LogLevel } from '@/types/LogLevel';
 import LucideServer from '~icons/lucide/server';
 import LucideTrash2 from '~icons/lucide/trash-2';
 import ServerModal from '@/components/ServerModal.vue';
 import RemotePairingModal from '@/components/RemotePairingModal.vue';
+import { TransportTypeEnum } from '@/types/TransportTypeEnum';
 
 const serverStore = useServerStore();
 const vibratorStore = useVibratorStore();
@@ -43,7 +40,7 @@ const handleRemoteConnect = async (serverUrl: string, deviceId: string) =>
 {
     try {
         if (selectedServer.value) {
-            await vibratorStore.connectRemote(selectedServer.value.url, deviceId);
+            await vibratorStore.switchTransport(TransportTypeEnum.REMOTE, selectedServer.value.url, deviceId);
             showRemotePairingModal.value = false;
         }
     } catch (error) {

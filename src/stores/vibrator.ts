@@ -5,301 +5,133 @@ import { useBleStore } from '@/stores/ble';
 import { useWebSocketStore } from '@/stores/websocket';
 import { useDebugStore } from '@/stores/debug';
 import { RequestEnum } from '@/types/RequestEnum';
-import { TransportType } from '@/types/TransportEnum';
+import { TransportTypeEnum } from '@/types/TransportTypeEnum';
 import { LogLevel } from '@/types/LogLevel';
 import { STATUS_REQUEST_INTERVAL } from '@/constants';
 import { BLEEmitterEnum } from '@/types/BLEEmitterEnum';
+import { WiFiEmitterEnum } from '@/types/WiFiEmitterEnum';
+import { Emitter } from '@/utils/Emitter';
+import { GlobalEmitterEnum } from '@/types/GlobalEmitterEnum';
 
-export const useVibratorStore = defineStore('vibrator', () => {
-  const status = ref<StatusResponse | null>(null);
-  const isConnected = ref(false);
-  const connectionType = ref<TransportType | null>(null);
-  const wsConnectionAttempted = ref(false);
-  const pendingTransport = ref<TransportType | null>(null);
-  const pendingServerAddress = ref<string | null>(null);
-  const pendingDeviceId = ref<string | null>(null);
-  let transportSwitchResolve: ((status: StatusResponse) => void) | null = null;
+export const useVibratorStore = defineStore('vibrator', {
+  state: () => ({
+    status: ref<StatusResponse | null>(null),
+    transport: ref<TransportTypeEnum | null>(TransportTypeEnum.BLE),
+    emitter: ref<Emitter>(new Emitter()),
+    listener: ref<any>(null)
+  }),
+  getters: {
+    isConnected() {
+      const bleStore = useBleStore();
+      const wsStore = useWebSocketStore();
 
-  const bleStore = useBleStore();
-  const wsStore = useWebSocketStore();
-  const debugStore = useDebugStore();
+      return bleStore.device !== null || wsStore.isConnected;
+    }
+  },
+  actions: {
+    switchTransport(newTransport: TransportTypeEnum, serverAddress?: string, deviceId?: string)
+    {
+      const debugStore = useDebugStore();
 
-  let bleConnectedUnsub: (() => void) | null = null;
-  let wsConnectedUnsub: (() => void) | null = null;
-  let wsMessageUnsub: (() => void) | null = null;
-  let wsDisconnectedUnsub: (() => void) | null = null;
-  const localRemoteConnect = ref(false);
-  let remoteConnectResolve: ((status: StatusResponse) => void) | null = null;
-  let remoteConnectTimeout: number | null = null;
+      debugStore.addLog(LogLevel.INFO, `Switching transport to ${newTransport}`);
 
-  const initListeners = () => {
-    bleConnectedUnsub = bleStore.emitter.on(BLEEmitterEnum.CONNECTED, () => {
-      setConnection(TransportType.BLE);
-      setInterval(() => {
-        requestStatus();
-      }, STATUS_REQUEST_INTERVAL)
-      requestStatus();
-    });
-    
-    
-    
-    wsConnectedUnsub = wsStore.on('connected', () => {
-      if (localRemoteConnect.value) {
-        // manual remote connect (user-entered device id) should be treated
-        // as talking to a remote device over the socket server, not as
-        // switching this device's transport.
-        setConnection(TransportType.REMOTE);
-        localRemoteConnect.value = false;
-      } else {
-        setConnection(TransportType.WIFI);
+      if (this.transport === newTransport)
+      {
+        debugStore.addLog(LogLevel.INFO, `Transport is already ${newTransport}, no action taken`);
+        return;
       }
-      requestStatus();
-    });
-    
-    wsMessageUnsub = wsStore.on('message', (payload: any) => {
-      if (payload.parsed && (connectionType.value === TransportType.WIFI || connectionType.value === TransportType.REMOTE)) {
-        // Handle partial messages (e.g. INTENSITY) by merging into existing status
-        if (payload.parsed.requestType === RequestEnum.INTENSITY) {
-          status.value = {
-            ...(status.value || {}),
-            intensity: payload.parsed.intensity
-          } as StatusResponse;
-        } else {
-          updateStatus(payload.parsed);
+
+      // listen for status update
+      const listener = this.emitter.on(GlobalEmitterEnum.MESSAGE, (message: StatusResponse) =>
+      {
+        if (message.transport === newTransport)
+        {
+          this.transport = newTransport;
+          this.emitter.off(GlobalEmitterEnum.MESSAGE, listener);
+          debugStore.addLog(LogLevel.INFO, `Transport switched to ${newTransport}`);
         }
+      })
 
-        // If we initiated a manual remote connect, resolve the promise
-        // when we get the first STATUS response for that remote device.
-        if (remoteConnectResolve && connectionType.value === TransportType.REMOTE && status.value) {
-          if (remoteConnectTimeout) {
-            clearTimeout(remoteConnectTimeout);
-            remoteConnectTimeout = null;
-          }
-          remoteConnectResolve(status.value);
-          remoteConnectResolve = null;
-        }
+      // send switch transport request on current transport
+      this.send({ requestType: RequestEnum.SWITCH_TRANSPORT, transport: newTransport, serverAddress, deviceId });
+    },
+    startStatusPolling()
+    {
+      const debugStore = useDebugStore();
+
+      debugStore.addLog(LogLevel.INFO, `Starting status polling listener`);
+
+      this.listener = this.emitter.on(GlobalEmitterEnum.MESSAGE, (message: StatusResponse) =>
+      {
+        this.status = message;
+      })
+
+      setInterval(() =>
+      {
+        this.requestStatus()
+      }, STATUS_REQUEST_INTERVAL);
+
+      this.requestStatus()
+    },
+    stopStatusPolling()
+    {
+      const debugStore = useDebugStore();
+
+      if (this.listener)
+      {
+        debugStore.addLog(LogLevel.INFO, `Stopping status polling listener`);
+        this.emitter.off(GlobalEmitterEnum.MESSAGE, this.listener);
+        this.listener = null;
       }
-    });
-    
-    wsDisconnectedUnsub = wsStore.on('disconnected', () => {
-      if (connectionType.value === TransportType.WIFI || connectionType.value === TransportType.REMOTE) {
-        clearConnection();
-      }
-    });
-  };
+    },
+    send(payload: any)
+    {
+      const bleStore = useBleStore();
+      const wsStore = useWebSocketStore();
 
-  const cleanupListeners = () => {
-    if (bleConnectedUnsub) bleConnectedUnsub();
-    if (wsConnectedUnsub) wsConnectedUnsub();
-    if (wsMessageUnsub) wsMessageUnsub();
-    if (wsDisconnectedUnsub) wsDisconnectedUnsub();
-  };
-
-  const updateStatus = (newStatus: StatusResponse) => {
-    status.value = newStatus;
-    
-    if (pendingTransport.value) {
-      debugStore.addLog(LogLevel.INFO, `Switching transport: $q{connectionType.value} -> ${pendingTransport.value}`);
-      const targetTransport = pendingTransport.value;
-      connectionType.value = targetTransport;
-      pendingTransport.value = null;
-      
-      // Connect to WebSocket if switching to WIFI or REMOTE
-      if ((targetTransport === TransportType.WIFI || targetTransport === TransportType.REMOTE)) {
-        let connectAddress: string;
-        if (targetTransport === TransportType.REMOTE && (newStatus as any).serverAddress && newStatus.deviceId) {
-          connectAddress = `${(newStatus as any).serverAddress}/pair?id=${newStatus.deviceId}`;
-        } else {
-          connectAddress = newStatus.ipAddress!;
-        }
-        debugStore.addLog(LogLevel.INFO, `Connecting to WebSocket at ${connectAddress}`);
-        wsStore.connect(connectAddress);
-        pendingServerAddress.value = null;
-        pendingDeviceId.value = null;
-      }
-      
-      if (transportSwitchResolve) {
-        debugStore.addLog(LogLevel.INFO, 'Resolving transport switch promise');
-        transportSwitchResolve(newStatus);
-        transportSwitchResolve = null;
-      }
-    }
-  };
-
-  const setConnection = (type: TransportType) => {
-    connectionType.value = type;
-    isConnected.value = true;
-  };
-
-  const clearConnection = () => {
-    connectionType.value = null;
-    isConnected.value = false;
-    status.value = null;
-    wsConnectionAttempted.value = false;
-  };
-
-  const requestStatus = async () => {
-    if (!isConnected.value) return;
-
-    const statusRequest = { requestType: RequestEnum.STATUS };
-
-    try {
-      if (connectionType.value === TransportType.BLE) {
-        await bleStore.send(JSON.stringify(statusRequest));
-      } else if (connectionType.value === TransportType.WIFI || connectionType.value === TransportType.REMOTE) {
-        wsStore.send(statusRequest);
-      }
-    } catch (error) {
-      console.error('Failed to request status:', error);
-    }
-  };
-
-  const setIntensity = async (intensity: number) => {
-    if (!isConnected.value) return;
-
-    const intensityRequest = { requestType: RequestEnum.INTENSITY, intensity };
-
-    try {
-      if (connectionType.value === TransportType.BLE) {
-        await bleStore.send(JSON.stringify(intensityRequest));
-      } else if (connectionType.value === TransportType.WIFI || connectionType.value === TransportType.REMOTE) {
-        wsStore.send(intensityRequest);
-      }
-      
-      // Request status to update UI with new intensity
-      await requestStatus();
-    } catch (error) {
-      console.error('Failed to set intensity:', error);
-    }
-  };
-
-  const switchTransport = async (newTransport: TransportType, serverAddress?: string, deviceId?: string): Promise<StatusResponse> => {
-    debugStore.addLog(LogLevel.INFO, `switchTransport: ${connectionType.value} -> ${newTransport}, connected=${isConnected.value}`);
-    if (!isConnected.value) {
-      // If user requested a remote transport but we are not currently
-      // connected to a device, allow a direct remote connect instead of
-      // failing with "Not connected". This covers UI flows that attempt
-      // to switch to a remote server by providing an address/device id.
-      if (newTransport === TransportType.REMOTE && serverAddress) {
-        debugStore.addLog(LogLevel.INFO, 'Not connected locally — performing direct remote connect');
-
-        return new Promise((resolve, reject) => {
-          const base = serverAddress.replace(/\/$/, '');
-          const connectAddress = `${base}/pair?id=${encodeURIComponent(deviceId || '')}`;
-
-          localRemoteConnect.value = true;
-          remoteConnectResolve = resolve;
-
-          // safety timeout
-          remoteConnectTimeout = window.setTimeout(() => {
-            remoteConnectTimeout = null;
-            localRemoteConnect.value = false;
-            if (remoteConnectResolve) {
-              remoteConnectResolve = null;
-            }
-            reject(new Error('Remote connect timed out'));
-          }, 8000);
-
-          try {
-            wsStore.connect(connectAddress);
-          } catch (error) {
-            if (remoteConnectTimeout) {
-              clearTimeout(remoteConnectTimeout);
-              remoteConnectTimeout = null;
-            }
-            remoteConnectResolve = null;
-            localRemoteConnect.value = false;
-            debugStore.addLog(LogLevel.ERROR, `Failed to connect to remote websocket: ${error}`);
-            reject(error);
-          }
-        });
-      }
-
-      throw new Error('Not connected');
-    }
-
-    return new Promise((resolve, reject) => {
-      const switchRequest = { 
-        requestType: RequestEnum.SWITCH_TRANSPORT, 
-        transport: newTransport,
-        ...(serverAddress && { serverAddress })
-      };
-      const payload = JSON.stringify(switchRequest);
-      pendingTransport.value = newTransport;
-      if (serverAddress) pendingServerAddress.value = serverAddress;
-      if (deviceId) pendingDeviceId.value = deviceId;
-      transportSwitchResolve = resolve;
-      debugStore.addLog(LogLevel.DEBUG, `Sending on ${connectionType.value}: ${payload}`);
-
-      try {
-        if (connectionType.value === TransportType.BLE) {
+      switch (this.transport)
+      {
+        case TransportTypeEnum.BLE:
           bleStore.send(payload);
-        } else if (connectionType.value === TransportType.WIFI || connectionType.value === TransportType.REMOTE) {
-          wsStore.send(switchRequest);
-        }
-        debugStore.addLog(LogLevel.DEBUG, 'Switch request sent, waiting for STATUS response');
-      } catch (error) {
-        debugStore.addLog(LogLevel.ERROR, `Failed to switch transport: ${error}`);
-        pendingTransport.value = null;
-        transportSwitchResolve = null;
-        reject(error);
+          break;
+        case TransportTypeEnum.WIFI:
+        case TransportTypeEnum.REMOTE:
+          wsStore.send(JSON.stringify(payload));
+          break;
       }
-    });
-  };
+    },
+    initialize()
+    {
+      const debugStore = useDebugStore();
+      const bleStore = useBleStore();
+      const wsStore = useWebSocketStore();
 
-  const connectRemote = async (serverUrl: string, deviceId: string): Promise<StatusResponse> => {
-    debugStore.addLog(LogLevel.INFO, `Connecting to remote server: ${serverUrl} with device ID: ${deviceId}`);
+      debugStore.addLog(LogLevel.INFO, `Initializing vibrator store listeners`);
 
-    return new Promise((resolve, reject) => {
-      const base = serverUrl.replace(/\/$/, '');
-      const connectAddress = `${base}/pair?id=${encodeURIComponent(deviceId)}`;
+      bleStore.emitter.on(BLEEmitterEnum.NOTIFICATION, (data) =>
+      {
+        this.emitter.emit(GlobalEmitterEnum.MESSAGE, data);
+      });
 
-      localRemoteConnect.value = true;
-      remoteConnectResolve = resolve;
-
-      // safety timeout
-      remoteConnectTimeout = window.setTimeout(() => {
-        remoteConnectTimeout = null;
-        localRemoteConnect.value = false;
-        if (remoteConnectResolve) {
-          remoteConnectResolve = null;
-        }
-        reject(new Error('Remote connect timed out'));
-      }, 8000);
-
-      try {
-        wsStore.connect(connectAddress);
-      } catch (error) {
-        if (remoteConnectTimeout) {
-          clearTimeout(remoteConnectTimeout);
-          remoteConnectTimeout = null;
-        }
-        remoteConnectResolve = null;
-        localRemoteConnect.value = false;
-        debugStore.addLog(LogLevel.ERROR, `Failed to connect to remote websocket: ${error}`);
-        reject(error);
-      }
-    });
-  };
-
-  initListeners();
-
-  const setCurrentTransport = (transport: TransportType) => {
-    connectionType.value = transport;
-  };
-
-  return {
-    status,
-    isConnected,
-    connectionType,
-    updateStatus,
-    setConnection,
-    clearConnection,
-    requestStatus,
-    setIntensity,
-    switchTransport,
-    connectRemote,
-    setCurrentTransport,
-    cleanupListeners
-  };
+      wsStore.emitter.on(WiFiEmitterEnum.MESSAGE, (message) =>
+      {
+        this.emitter.emit(GlobalEmitterEnum.MESSAGE, message);
+      });
+    },
+    setIntensity(intensity: number)
+    {
+      this.stopStatusPolling();
+      this.send({ type: RequestEnum.INTENSITY, intensity });
+      this.requestStatus();
+      this.startStatusPolling();
+    },
+    setWiFiCredentials(ssid: string, password: string)
+    {
+      this.send({ type: RequestEnum.WIFI_CREDENTIALS, ssid, password });
+    },
+    requestStatus()
+    {
+      this.send({ requestType: RequestEnum.STATUS });
+    }
+  },
 });

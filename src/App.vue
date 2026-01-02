@@ -8,9 +8,11 @@ import { useAppStore } from './stores/app';
 import { useBleStore } from './stores/ble';
 import { onMounted } from 'vue';
 import { BleClient } from '@capacitor-community/bluetooth-le';
+import { useVibratorStore } from './stores/vibrator';
 
 const appStore = useAppStore();
 const bleStore = useBleStore();
+const vibratorStore = useVibratorStore();
 
 appStore.loadSettings();
 
@@ -22,6 +24,9 @@ onMounted(async () => {
   } else if (appStore.lastConnectedDeviceId) {
     await bleStore.scan();
   }
+  
+  vibratorStore.initialize()
+  vibratorStore.startStatusPolling();
 });
 </script>
 

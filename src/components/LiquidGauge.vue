@@ -5,7 +5,7 @@ import "vue-roller/dist/style.css";
 import vibrator from '/vibrator.png'
 import { getIntensityColor, getIntensityGradient } from '../utils/colorUtils';
 import { useModalStore } from '@/stores/modal';
-import { ModalId } from '@/types/ModalEnum';
+import { ModalEnum } from '@/types/ModalEnum';
 import SettingsModal from './SettingsModal.vue';
 
 interface Props {
@@ -17,11 +17,11 @@ const props = defineProps<Props>();
 const modalStore = useModalStore();
 
 const openSettings = () => {
-  modalStore.open(ModalId.SETTINGS);
+  modalStore.open(ModalEnum.SETTINGS);
 };
 
 const closeSettings = () => {
-  modalStore.close(ModalId.SETTINGS);
+  modalStore.close(ModalEnum.SETTINGS);
 };
 
 const clamped = computed(() => Math.min(100, Math.max(0, props.battery)));
@@ -99,7 +99,7 @@ onUnmounted(() => {
     </div>
     
     <SettingsModal 
-      :is-open="modalStore.isOpen(ModalId.SETTINGS)" 
+      :is-open="modalStore.isOpen(ModalEnum.SETTINGS)" 
       @dismiss="closeSettings" 
     />
   </div>

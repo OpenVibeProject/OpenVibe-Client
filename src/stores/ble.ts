@@ -80,18 +80,30 @@ export const useBleStore = defineStore('ble', {
         return false;
       }
     },
-    async send(payload: string | Uint8Array)
+    async send(payload: any)
     {
       const debugStore = useDebugStore();
       if (!this.deviceId)
       {
         debugStore.addLog(LogLevel.ERROR, 'BLE send called with no deviceId');
+        return;
       }
-      const buf = typeof payload === 'string' ? new TextEncoder().encode(payload) : payload;
+
+      let uint8: Uint8Array;
+      if (payload instanceof Uint8Array) {
+        uint8 = payload;
+      } else if (payload instanceof ArrayBuffer) {
+        uint8 = new Uint8Array(payload);
+      } else if (typeof payload === 'string') {
+        uint8 = new TextEncoder().encode(payload);
+      } else {
+        uint8 = new TextEncoder().encode(JSON.stringify(payload));
+      }
+
       try
       {
-        debugStore.addLog(LogLevel.DEBUG, `BLE send to ${this.deviceId}: ${typeof payload === 'string' ? payload : '[binary]'}`);
-        await BleClient.write(this.deviceId as string, BLEEnum.SERVICE_UUID, BLEEnum.CHARACTERISTIC_UUID, new DataView((buf as Uint8Array).buffer));
+        debugStore.addLog(LogLevel.DEBUG, `BLE send to ${this.deviceId}: ${typeof payload === 'string' ? payload : '[binary/object]'}`);
+        await BleClient.write(this.deviceId as string, BLEEnum.SERVICE_UUID, BLEEnum.CHARACTERISTIC_UUID, new DataView(uint8.buffer));
         debugStore.addLog(LogLevel.INFO, `BLE send succeeded to ${this.deviceId}`);
       } catch (e)
       {

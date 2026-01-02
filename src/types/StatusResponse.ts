@@ -1,4 +1,4 @@
-import { TransportType } from "./TransportEnum";
+import { TransportTypeEnum } from "./TransportTypeEnum";
 
 export type StatusResponse = {
     intensity: number;
@@ -11,5 +11,5 @@ export type StatusResponse = {
     version: string;
     deviceId: string;
     serverAddress: string | null;
-    transport: TransportType;
+    transport: TransportTypeEnum;
 }

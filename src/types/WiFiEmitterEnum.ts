@@ -1,0 +1,5 @@
+export enum WiFiEmitterEnum {
+    CONNECTED = 'CONNECTED',
+    DISCONNECTED = 'DISCONNECTED',
+    MESSAGE = 'MESSAGE'
+}

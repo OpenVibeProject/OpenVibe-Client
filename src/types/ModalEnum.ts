@@ -1,4 +1,4 @@
-export enum ModalId {
-  SETTINGS = 'settings',
-  SERVER = 'server'
+export enum ModalEnum {
+  SETTINGS = 'SETTINGS',
+  SERVER = 'SERVER'
 }
