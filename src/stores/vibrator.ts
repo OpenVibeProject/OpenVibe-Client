@@ -7,7 +7,7 @@ import { useDebugStore } from '@/stores/debug';
 import { RequestEnum } from '@/types/RequestEnum';
 import { TransportTypeEnum } from '@/types/TransportTypeEnum';
 import { LogLevel } from '@/types/LogLevel';
-import { STATUS_REQUEST_INTERVAL } from '@/constants';
+import { STATUS_REQUEST_INTERVAL, WEBSOCKET_PORT } from '@/constants';
 import { BLEEmitterEnum } from '@/types/BLEEmitterEnum';
 import { WiFiEmitterEnum } from '@/types/WiFiEmitterEnum';
 import { Emitter } from '@/utils/Emitter';
@@ -18,7 +18,8 @@ export const useVibratorStore = defineStore('vibrator', {
     status: ref<StatusResponse | null>(null),
     transport: ref<TransportTypeEnum | null>(TransportTypeEnum.BLE),
     emitter: ref<Emitter>(new Emitter()),
-    listener: ref<any>(null)
+    listener: ref<any>(null),
+    pollingInterval: ref<number | null>(null)
   }),
   getters: {
     isConnected() {
@@ -32,6 +33,7 @@ export const useVibratorStore = defineStore('vibrator', {
     switchTransport(newTransport: TransportTypeEnum, serverAddress?: string, deviceId?: string)
     {
       const debugStore = useDebugStore();
+      const wsStore = useWebSocketStore();
 
       debugStore.addLog(LogLevel.INFO, `Switching transport to ${newTransport}`);
 
@@ -41,23 +43,36 @@ export const useVibratorStore = defineStore('vibrator', {
         return;
       }
 
-      // listen for status update
-      const listener = this.emitter.on(GlobalEmitterEnum.MESSAGE, (message: StatusResponse) =>
+      let transportSwitchListener: any;
+      transportSwitchListener = this.emitter.on(GlobalEmitterEnum.MESSAGE, (message: StatusResponse) =>
       {
         if (message.transport === newTransport)
         {
           this.transport = newTransport;
-          this.emitter.off(GlobalEmitterEnum.MESSAGE, listener);
+          if (transportSwitchListener) {
+            transportSwitchListener();
+            transportSwitchListener = null;
+          }
+          if (newTransport === TransportTypeEnum.WIFI) {
+            wsStore.connect(`ws://${message.ipAddress}:${WEBSOCKET_PORT}`)
+          } else if (newTransport === TransportTypeEnum.REMOTE && serverAddress) {
+            wsStore.connect(`${serverAddress}/pair?id=${deviceId}`)
+          }
           debugStore.addLog(LogLevel.INFO, `Transport switched to ${newTransport}`);
         }
       })
 
-      // send switch transport request on current transport
       this.send({ requestType: RequestEnum.SWITCH_TRANSPORT, transport: newTransport, serverAddress, deviceId });
     },
     startStatusPolling()
     {
       const debugStore = useDebugStore();
+
+      if (this.pollingInterval)
+      {
+        debugStore.addLog(LogLevel.INFO, `Status polling already running`);
+        return;
+      }
 
       debugStore.addLog(LogLevel.INFO, `Starting status polling listener`);
 
@@ -66,7 +81,7 @@ export const useVibratorStore = defineStore('vibrator', {
         this.status = message;
       })
 
-      setInterval(() =>
+      this.pollingInterval = window.setInterval(() =>
       {
         this.requestStatus()
       }, STATUS_REQUEST_INTERVAL);
@@ -80,8 +95,19 @@ export const useVibratorStore = defineStore('vibrator', {
       if (this.listener)
       {
         debugStore.addLog(LogLevel.INFO, `Stopping status polling listener`);
-        this.emitter.off(GlobalEmitterEnum.MESSAGE, this.listener);
+        try {
+          this.listener();
+        } catch (e) {
+          this.emitter.off(GlobalEmitterEnum.MESSAGE, this.listener as any);
+        }
         this.listener = null;
+      }
+
+      if (this.pollingInterval)
+      {
+        debugStore.addLog(LogLevel.INFO, `Clearing status polling interval`);
+        clearInterval(this.pollingInterval);
+        this.pollingInterval = null;
       }
     },
     send(payload: any)
@@ -121,13 +147,12 @@ export const useVibratorStore = defineStore('vibrator', {
     setIntensity(intensity: number)
     {
       this.stopStatusPolling();
-      this.send({ type: RequestEnum.INTENSITY, intensity });
-      this.requestStatus();
+      this.send({ requestType: RequestEnum.INTENSITY, intensity });
       this.startStatusPolling();
     },
     setWiFiCredentials(ssid: string, password: string)
     {
-      this.send({ type: RequestEnum.WIFI_CREDENTIALS, ssid, password });
+      this.send({ requestType: RequestEnum.WIFI_CREDENTIALS, ssid, password });
     },
     requestStatus()
     {

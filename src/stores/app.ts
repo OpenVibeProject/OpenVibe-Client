@@ -51,11 +51,3 @@ export const useAppStore = defineStore('app', {
     }
   }
 });
-
-// augment runtime state defaults (Pinia doesn't require declaring all fields in state)
-declare module 'pinia' {
-  interface PiniaCustomStateProperties {
-    wifiPermissionRequested?: boolean;
-    wifiPermissionStatus?: WiFiPermissionStatus;
-  }
-}

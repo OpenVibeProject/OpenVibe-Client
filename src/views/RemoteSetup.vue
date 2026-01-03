@@ -40,7 +40,7 @@ const handleRemoteConnect = async (serverUrl: string, deviceId: string) =>
 {
     try {
         if (selectedServer.value) {
-            await vibratorStore.switchTransport(TransportTypeEnum.REMOTE, selectedServer.value.url, deviceId);
+            vibratorStore.switchTransport(TransportTypeEnum.REMOTE, selectedServer.value.url, deviceId);
             showRemotePairingModal.value = false;
         }
     } catch (error) {

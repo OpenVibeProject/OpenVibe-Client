@@ -12,6 +12,7 @@ import { BLEEmitterEnum } from '@/types/BLEEmitterEnum';
 
 export const useBleStore = defineStore('ble', {
   state: () => ({
+    isConnected: ref(false),
     device: ref(null) as Ref<ScanResult | null>,
     emitter: new Emitter()
   }),
@@ -26,8 +27,8 @@ export const useBleStore = defineStore('ble', {
       const appStore = useAppStore()
 
       if (appStore.lastConnectedDeviceId) {
-        const connected = await this.connect({ device: { deviceId: appStore.lastConnectedDeviceId } } as ScanResult);
-        if (connected) {
+        this.isConnected = await this.connect({ device: { deviceId: appStore.lastConnectedDeviceId } } as ScanResult);
+        if (this.isConnected) {
           return;
         }
       }
@@ -38,7 +39,7 @@ export const useBleStore = defineStore('ble', {
         debugStore.addLog(LogLevel.DEBUG, `Bluetooth: found device ${name} (${result.device.deviceId}) rssi=${result.rssi}`)
         if (name.startsWith(TARGET_DEVICE_NAME_PREFIX)) {
           await BleClient.stopLEScan()
-          await this.connect(result)
+          this.isConnected = await this.connect(result)
         }
         }
       );
@@ -58,12 +59,14 @@ export const useBleStore = defineStore('ble', {
 
           this.device = null;
           this.emitter.emit(BLEEmitterEnum.DISCONNECTED);
+          this.isConnected = false;
           debugStore.addLog(LogLevel.WARN, `BLE Disconnected from: ${deviceId}`);
         })
 
         debugStore.addLog(LogLevel.INFO, `BLE Connected to: ${deviceId}`);
         this.device = scanResult
         this.emitter.emit(BLEEmitterEnum.CONNECTED, deviceId);
+        this.isConnected = true;
         appStore.setLastConnectedDevice(deviceId);
 
         await BleClient.startNotifications(deviceId, BLEEnum.SERVICE_UUID, BLEEnum.NOTIFY_CHARACTERISTIC_UUID,
@@ -107,6 +110,7 @@ export const useBleStore = defineStore('ble', {
         debugStore.addLog(LogLevel.INFO, `BLE send succeeded to ${this.deviceId}`);
       } catch (e)
       {
+        this.isConnected = false;
         debugStore.addLog(LogLevel.ERROR, `BLE send error: ${String(e)}`);
         throw e;
       }

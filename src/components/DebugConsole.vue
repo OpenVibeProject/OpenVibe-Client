@@ -14,7 +14,6 @@ const isDragging = ref(false);
 const position = ref({ x: 50, y: 50 });
 const logsContainer = ref<HTMLElement | null>(null);
 
-// Style for minimized draggable icon
 const iconStyle = (): CSSProperties => ({
   position: 'fixed',
   left: `${position.value.x}px`,
