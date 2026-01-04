@@ -42,7 +42,7 @@ const sendSwitchTransportRequest = async (transport: TransportTypeEnum) => {
   try {
     const serverAddress =
       transport === TransportTypeEnum.REMOTE ? selectedServer.value : undefined;
-    vibratorStore.switchTransport(transport, serverAddress);
+    vibratorStore.switchTransport(transport, serverAddress, vibratorStore.status?.deviceId);
   } catch (error) {
     debugStore.addLog(LogLevel.ERROR, `Transport switch failed: ${error}`);
   } finally {
