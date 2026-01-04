@@ -38,14 +38,19 @@ export const useWebSocketStore = defineStore('websocket', {
       this.ws = new WebSocket(target);
 
       this.ws.onopen = () => {
+        this.isConnected = true;
         debugStore.addLog(LogLevel.INFO, `WebSocket connected to ${target}`);
         this.emitter.emit(WiFiEmitterEnum.CONNECTED, { target });
       };
 
       this.ws.onmessage = (event) => {
         debugStore.addLog(LogLevel.DEBUG, `WebSocket message: ${event.data}`);
-        const message = JSON.parse(event.data);
-        this.emitter.emit(WiFiEmitterEnum.MESSAGE, message);
+        try {
+          const message = JSON.parse(event.data);
+          this.emitter.emit(WiFiEmitterEnum.MESSAGE, message);
+        } catch (e) {
+          debugStore.addLog(LogLevel.ERROR, `WebSocket message parse error: ${String(e)}`);
+        }
       }
 
       this.ws.onclose = () => {

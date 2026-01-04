@@ -83,6 +83,7 @@ onMounted(async () =>
     <ion-page>
         <ion-content>
             <div class="flex flex-col justify-center items-center h-full px-8">
+                <div v-if="!vibratorStore.isOwnDevice" class="alert text-lg mb-24">You are controlling a remote device</div>
                 <LiquidGauge :battery="battery" :intensity="intensity" />
                 <h1 class="text-4xl mt-4">Status</h1>
                 <div v-if="isOnline" class="flex gap-2 flex-row justify-center items-center text-green-400">
@@ -186,5 +187,14 @@ ion-content {
     align-items: center;
     justify-content: center;
     z-index: 10;
+}
+
+.alert {
+    background-color: #333;
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 8px;
+    text-align: center;
+    border: 1px solid #555;
 }
 </style>

@@ -15,6 +15,7 @@ import { GlobalEmitterEnum } from '@/types/GlobalEmitterEnum';
 
 export const useVibratorStore = defineStore('vibrator', {
   state: () => ({
+    isOwnDevice: ref<boolean>(true),
     status: ref<StatusResponse | null>(null),
     transport: ref<TransportTypeEnum | null>(TransportTypeEnum.BLE),
     emitter: ref<Emitter>(new Emitter()),
@@ -22,7 +23,8 @@ export const useVibratorStore = defineStore('vibrator', {
     pollingInterval: ref<number | null>(null)
   }),
   getters: {
-    isConnected() {
+    isConnected()
+    {
       const bleStore = useBleStore();
       const wsStore = useWebSocketStore();
 
@@ -35,7 +37,7 @@ export const useVibratorStore = defineStore('vibrator', {
       const debugStore = useDebugStore();
       const wsStore = useWebSocketStore();
 
-      debugStore.addLog(LogLevel.INFO, `Switching transport to ${newTransport}`);
+      debugStore.addLog(LogLevel.INFO, `Switching transport to ${newTransport} with params serverAddress=${serverAddress}, deviceId=${deviceId}`);
 
       if (this.transport === newTransport)
       {
@@ -49,20 +51,43 @@ export const useVibratorStore = defineStore('vibrator', {
         if (message.transport === newTransport)
         {
           this.transport = newTransport;
-          if (transportSwitchListener) {
+          if (transportSwitchListener)
+          {
             transportSwitchListener();
             transportSwitchListener = null;
           }
-          if (newTransport === TransportTypeEnum.WIFI) {
+          if (newTransport === TransportTypeEnum.WIFI)
+          {
             wsStore.connect(`ws://${message.ipAddress}:${WEBSOCKET_PORT}`)
-          } else if (newTransport === TransportTypeEnum.REMOTE && serverAddress) {
+          } else if (newTransport === TransportTypeEnum.REMOTE && serverAddress)
+          {
             wsStore.connect(`${serverAddress}/pair?id=${deviceId}`)
           }
           debugStore.addLog(LogLevel.INFO, `Transport switched to ${newTransport}`);
         }
       })
 
-      this.send({ requestType: RequestEnum.SWITCH_TRANSPORT, transport: newTransport, serverAddress, deviceId });
+      if (serverAddress && deviceId && newTransport === TransportTypeEnum.REMOTE)
+      {
+        this.isOwnDevice = deviceId === this.status?.deviceId
+        
+        if (this.isOwnDevice)
+        {
+          this.send({ requestType: RequestEnum.SWITCH_TRANSPORT, transport: newTransport, serverAddress, deviceId });
+        } else {
+          debugStore.addLog(LogLevel.INFO, `Remotely connecting to not owned device ${deviceId} with server ${serverAddress}`);
+          this.transport = newTransport;
+          if (transportSwitchListener)
+          {
+            transportSwitchListener();
+            transportSwitchListener = null;
+          }
+          wsStore.connect(`${serverAddress}/pair?id=${deviceId}`)
+        }
+        return
+      }
+
+      this.send({ requestType: RequestEnum.SWITCH_TRANSPORT, transport: newTransport });
     },
     startStatusPolling()
     {
@@ -95,9 +120,11 @@ export const useVibratorStore = defineStore('vibrator', {
       if (this.listener)
       {
         debugStore.addLog(LogLevel.INFO, `Stopping status polling listener`);
-        try {
+        try
+        {
           this.listener();
-        } catch (e) {
+        } catch (e)
+        {
           this.emitter.off(GlobalEmitterEnum.MESSAGE, this.listener as any);
         }
         this.listener = null;

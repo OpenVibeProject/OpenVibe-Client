@@ -11,7 +11,7 @@ interface Props
 interface Emits
 {
   (e: 'dismiss'): void;
-  (e: 'connect', serverUrl: string, deviceId: string): void;
+  (e: 'connect', deviceId: string): void;
 }
 
 const emit = defineEmits<Emits>();
@@ -27,7 +27,7 @@ const handleConnect = () =>
 {
   if (deviceId.value?.trim())
   {
-    emit('connect', '', deviceId.value);
+    emit('connect', deviceId.value);
     deviceId.value = '';
     router.push('/');
   }
